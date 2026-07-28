@@ -34,7 +34,6 @@ mistaken for a route. Only files that are meant to be hit as
 api/
   segments.js          → GET /api/segments
   abm/index.js          → GET /api/abm?segment=<id>
-  abm/overview.js       → GET /api/abm/overview  (combined totals across every active segment)
   pipeline/index.js     → GET /api/pipeline?period=<weekly|monthly>
   sources/index.js      → GET /api/sources?period=<lifetime|monthly|weekly>
 
@@ -43,9 +42,7 @@ lib/
                           associations, 429 backoff, scope-error detection
   respond.js              shared response helpers (cache headers, error mapping)
   dateBuckets.js          weekly/monthly trend bucketing (used by Pipeline)
-  abm.js                  ABM shaping logic (buildAbmPayload) — shared by
-                          api/abm/index.js and api/abm/overview.js so the
-                          overview numbers can't drift from a segment's own page
+  abm.js                  ABM shaping logic (buildAbmPayload) for api/abm/index.js
   abm-segments/
     index.js              registry of all ABM segments
     logistics.js           real data: 50 companies / 165 leads
@@ -58,12 +55,16 @@ src/
     KpiRow, FunnelChart, TrendChart, DataTable, PeriodToggle, StatusPill,
     AsyncState, TopNav
   modules/
-    abm/        AbmPage, LeadTable, useAbmData
+    abm/        AbmPage, LeadTable, useAbmData (includes useAllAbmData — see below)
     pipeline/   PipelinePage, DealsTable, usePipelineData
     sources/    SourcesPage, SourceLeadsTable, useSourcesData
   hooks/
-    useApiData    generic {data, loading, error, refresh} fetch + 5min poll
+    useApiData    generic {data, loading, error, refresh} fetch, cached +
+                  stale-while-revalidate, 5min background poll
     useTheme      light/dark toggle, persisted to localStorage
+  lib/
+    apiCache.js    sessionStorage read/write used by useApiData (and
+                  useAllAbmData) for the stale-while-revalidate cache
 ```
 
 `DataTable` is the biggest reuse win: every table in the app (leads, deals,
@@ -168,8 +169,40 @@ actually happened, and it's easy to conflate the two. The real signal is
 (value `opportunity`) — `getLifecycleStages()` in `lib/abm.js` fetches the
 live stage list/order so this doesn't depend on a hardcoded assumption about
 stage order, and `meeting_done` is true once a lead's `lifecyclestage` index
-is at or past that stage. `api/abm/overview.js` fetches the stage list once
-and reuses it across every segment rather than re-fetching per segment.
+is at or past that stage.
+
+## Performance: caching and why there's no server-side "overview" endpoint
+
+Two things make repeat loads fast without changing what data is fetched:
+
+- **Client-side stale-while-revalidate.** `useApiData` (and ABM's
+  `useAllAbmData`) cache each response in `sessionStorage` keyed by URL. On
+  mount, cached data renders immediately — `loading` only means "nothing to
+  show yet," not "a request is in flight" — while a fresh request happens in
+  the background and silently updates the screen when it resolves. This is
+  what makes a browser refresh feel instant instead of re-paying every
+  HubSpot round-trip from zero.
+- **The "Overall ABM Effort" totals are computed client-side**, not by a
+  dedicated `/api/abm/overview` endpoint. An earlier version had one, and it
+  rebuilt every segment's full data server-side on every request — which
+  meant loading `/abm` fetched the *selected* segment's data twice (once for
+  its own detail view, once again inside the overview's server-side loop).
+  Now `useAllAbmData` fetches every active segment through the same
+  `/api/abm?segment=<id>` endpoint in parallel, and the frontend sums them
+  (`aggregateOverview` in `AbmPage.jsx`). One fetch per segment total, and
+  since it's the same URL either way, switching the segment tab reuses
+  whatever's already been fetched instead of triggering a new request.
+
+Within `api/abm/index.js` itself, the contacts search and the
+contacts→calls association lookup are independent of each other and now run
+concurrently (`Promise.all`) rather than sequentially with a manual pause
+between them — the pause was defensive throttling left over from when these
+ran back-to-back; removing it and cutting the remaining inter-batch pacing
+from 350ms to 150ms (`lib/hubspot.js`) is safe for the request volumes these
+ID-batch lookups actually generate. This is a different situation from the
+concurrent-pagination collision noted below for Lead Sources — that was two
+*paginated* loops (many sequential requests each) racing each other; ABM's
+segment fetches are a small, fixed number of batches, not pagination.
 
 ## Email funnel data source
 

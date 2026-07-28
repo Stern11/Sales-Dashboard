@@ -1,7 +1,17 @@
 // GET /api/abm?segment=logistics — live ABM outreach data (companies, leads,
 // LinkedIn/Calling/Email funnels) for one segment. Segment ID lists live in
-// lib/abm-segments/*.js; shaping logic lives in lib/abm.js (shared with
-// api/abm/overview.js); everything else is fetched from HubSpot per request.
+// lib/abm-segments/*.js; shaping logic lives in lib/abm.js. Everything else
+// is fetched from HubSpot per request.
+//
+// There's deliberately no separate "combined totals" endpoint — the frontend
+// fetches every active segment through this same endpoint in parallel and
+// sums them client-side (src/modules/abm/useAbmData.js's useAllAbmData) for
+// the "Overall ABM Effort" row. An earlier version had a dedicated
+// api/abm/overview.js that rebuilt every segment server-side, which meant
+// loading the ABM page fetched the selected segment's data twice (once for
+// its own view, once again inside the overview loop). Doing it client-side
+// means one fetch per segment total, and the response is cached per segment
+// URL either way, so switching tabs reuses what's already been fetched.
 
 import { getToken } from "../../lib/hubspot.js";
 import { withHubspotErrorHandling } from "../../lib/respond.js";
