@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__claude_ai_Vercel__list_teams",
+      "Bash(lsof -nP -iTCP -sTCP:LISTEN)",
+      "Bash(lsof -nP -iTCP:3000 -sTCP:LISTEN)",
+      "Bash(npx vercel *)",
+      "Bash(curl -s http://localhost:3000/api/data)",
+      "Bash(node -e \"require\\('dotenv'\\).config\\({path:'.env.local'}\\); console.log\\(JSON.stringify\\(process.env.HUBSPOT_TOKEN\\)\\)\")",
+      "Bash(node -e ' *)",
+      "Bash(ps eww *)",
+      "Bash(echo \"exit:$?\")"
+    ]
+  }
+}

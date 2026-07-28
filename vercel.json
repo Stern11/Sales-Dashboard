@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "framework": "vite",
+  "installCommand": "npm install",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "functions": {
+    "api/**/*.js": {
+      "maxDuration": 30
+    }
+  },
+  "rewrites": [
+    { "source": "/((?!api/|@vite|@react-refresh|@fs|@id|src/|node_modules/|assets/).*)", "destination": "/index.html" }
+  ]
+}
