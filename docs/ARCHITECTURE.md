@@ -207,13 +207,30 @@ segment fetches are a small, fixed number of batches, not pagination.
 ## Email funnel data source
 
 There's no raw send-log for one-to-one sales emails available with this
-token — that needs HubSpot's `connected-email-data-access` scope, which
-requires an actual connected mailbox, not just a scope toggle. The email
-funnel in the ABM module is inferred instead from
-`hs_sales_email_last_opened/clicked/replied` plus whether an email address is
-on file at all, giving: No Email On File → Sent, No Response → Opened →
-Clicked → Replied. If a precise Sent/Not-Yet-Sent distinction becomes
-important, the cleanest fix is a manual custom contact property
-(`email_reachout_status`) mirroring how `linkedin_reachout_status` already
-works — `api/abm/index.js` is the only file that would need to change to
-prefer it when present.
+token — the scopes for it (`crm.objects.emails.read` / `sales-email-read`)
+aren't selectable on this HubSpot plan, and reading them properly needs a
+connected mailbox, not just a scope toggle. `emailStageFor()` in `lib/abm.js`
+is built from two signals that *are* available:
+
+- `hs_sales_email_last_opened/clicked/replied` — set once the recipient acts
+  on a tracked email.
+- `notes_last_contacted` — HubSpot's generic "last contacted" rollup. It also
+  gets bumped by the Sales Chrome/Outlook extension logging a sent email,
+  confirmed against real data on 2026-07-30 (leads with a fresh
+  `notes_last_contacted` timestamp and zero associated Calls, right after a
+  real send through the extension).
+
+Without the second signal, "sent but not yet opened" and "never contacted at
+all" were indistinguishable — every lead with an email address landed in the
+same "Sent, No Response" bucket regardless of whether anything had actually
+been sent. The funnel now has six stages: No Email On File → **Not Yet
+Contacted** → Sent, No Response → Opened → Clicked → Replied.
+
+Caveat: `notes_last_contacted` is a general "sales activity" rollup, not
+strictly email-specific — a logged call or meeting could in principle also
+bump it. It's cross-checked against this app's own Calls data when
+reasoning about it, but there's no hard guarantee at the HubSpot data level.
+If a precise, unambiguous Sent signal becomes important, the cleanest fix is
+a manual custom contact property (`email_reachout_status`) mirroring how
+`linkedin_reachout_status` already works — `lib/abm.js` is the only file
+that would need to change to prefer it when present.

@@ -2,10 +2,17 @@ import { useMemo } from "react";
 import { DataTable } from "../../components/DataTable.jsx";
 import { StatusPill } from "../../components/StatusPill.jsx";
 
+const EMAIL_PILL_VARIANT = {
+  "No Email On File": "missing",
+  "Not Yet Contacted": "notstarted",
+  "Sent, No Response": "stage",
+  Opened: "stage",
+  Clicked: "stage",
+  Replied: "ready",
+};
+
 function EmailPill({ lead }) {
-  return lead.email_status === "Ready to Send (email on file)"
-    ? <StatusPill variant="ready">On file</StatusPill>
-    : <StatusPill variant="missing">No email</StatusPill>;
+  return <StatusPill variant={EMAIL_PILL_VARIANT[lead.email_funnel_stage] || "stage"}>{lead.email_funnel_stage}</StatusPill>;
 }
 
 function LinkedInPill({ lead }) {
@@ -57,6 +64,12 @@ export function LeadTable({ leads }) {
           options: ["Done", "Not Done"],
           getValue: (l) => (l.meeting_done ? "Done" : "Not Done"),
         },
+        {
+          key: "email_funnel_stage",
+          label: "All email statuses",
+          options: ["No Email On File", "Not Yet Contacted", "Sent, No Response", "Opened", "Clicked", "Replied"],
+          getValue: (l) => l.email_funnel_stage,
+        },
       ]}
       columns={[
         { key: "company", label: "Company" },
@@ -72,7 +85,7 @@ export function LeadTable({ leads }) {
           ),
         },
         { key: "title", label: "Title" },
-        { key: "email_status", label: "Email", sortable: false, render: (l) => <EmailPill lead={l} /> },
+        { key: "email_funnel_stage", label: "Email", sortable: false, render: (l) => <EmailPill lead={l} /> },
         {
           key: "linkedin_reachout_status",
           label: "LinkedIn Reachout",
