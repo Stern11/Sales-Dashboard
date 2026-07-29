@@ -2,16 +2,16 @@
 
 A live, HubSpot-backed dashboard with three modules:
 
-- **ABM Outreach** — target accounts and leads by segment (Logistics live
-  today; CPG/F&B ready to populate), with LinkedIn, Calling, and Email
-  funnels.
+- **ABM Outreach** — target accounts and leads by segment (Logistics and
+  Health and Personal Care live today; CPG/F&B ready to populate), with
+  LinkedIn, Calling, and Email funnels, plus Demo Call/meeting tracking.
 - **Sales Pipeline** — open pipeline by stage, new-deals and closed-won
   trends (weekly/monthly), full deal list.
-- **Lead Sources** — leads and meetings by channel (LinkedIn Ads, Paid
-  Search, Organic, Offline, ...), with a lifecycle-stage funnel splittable by
-  channel (lifetime/monthly/weekly). Stands in for a Marketing Campaigns
-  module, which isn't buildable on the current HubSpot plan — see
-  [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#lead-sources--why-it-exists-instead-of-a-marketing-campaigns-module).
+- **Performance Marketing** — LinkedIn Ads leads, meetings booked, and a
+  lifecycle-stage funnel scoped to that channel (lifetime/monthly/weekly).
+  Ad spend and live-campaign count are wired up but scope-blocked on the
+  current HubSpot plan — see
+  [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#performance-marketing--two-independently-gated-data-sources).
 
 No login — anyone with the URL can view it. Every request fetches fresh from
 HubSpot (5-minute edge cache), so it's always current.

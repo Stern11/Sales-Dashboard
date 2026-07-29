@@ -1,7 +1,10 @@
-// GET /api/sources?period=lifetime|monthly|weekly — live Lead Sources /
-// attribution data: which channel (LinkedIn Ads, Paid Search, Organic,
-// Offline, ...) each contact came from, their lifecycle-stage progress, and
-// how many meetings have been booked with them.
+// GET /api/sources?period=lifetime|monthly|weekly — live attribution data:
+// which channel (LinkedIn Ads, Paid Search, Organic, Offline, ...) each
+// contact came from, their lifecycle-stage progress, and how many meetings
+// have been booked with them. Powers the Performance Marketing page
+// (src/modules/marketing), which filters this down to the LinkedIn channel —
+// the endpoint itself stays general so adding another ad channel later
+// (Google/Meta Ads) is a frontend filter change, not a backend rewrite.
 //
 // This exists in place of a HubSpot Marketing Campaigns module — this
 // portal's token doesn't have `marketing.campaigns.read` (see

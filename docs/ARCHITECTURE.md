@@ -35,7 +35,8 @@ api/
   segments.js          → GET /api/segments
   abm/index.js          → GET /api/abm?segment=<id>
   pipeline/index.js     → GET /api/pipeline?period=<weekly|monthly>
-  sources/index.js      → GET /api/sources?period=<lifetime|monthly|weekly>
+  sources/index.js      → GET /api/sources?period=<lifetime|monthly|weekly> (channel attribution, all channels — Performance Marketing filters to LinkedIn)
+  marketing/spend.js    → GET /api/marketing/spend (ad spend + live campaign count — scope-blocked, see below)
 
 lib/
   hubspot.js             HubSpot API client: auth, batched/paged search,
@@ -57,7 +58,7 @@ src/
   modules/
     abm/        AbmPage, LeadTable, useAbmData (includes useAllAbmData — see below)
     pipeline/   PipelinePage, DealsTable, usePipelineData
-    sources/    SourcesPage, SourceLeadsTable, useSourcesData
+    marketing/  MarketingPage, AdLeadsTable, useMarketingData (Performance Marketing)
   hooks/
     useApiData    generic {data, loading, error, refresh} fetch, cached +
                   stale-while-revalidate, 5min background poll
@@ -115,38 +116,54 @@ disappears (no code change needed) if you ever want to hide one.
 | ABM Outreach | `crm.objects.contacts.read`, `crm.objects.companies.read` | ✅ granted |
 | ABM Calling funnel | `crm.objects.calls.read` (bundled with the contacts scope on this portal) | ✅ granted |
 | Sales Pipeline | `crm.objects.deals.read` | ✅ granted |
-| Lead Sources | `crm.objects.contacts.read` (meetings read is bundled with it on this portal) | ✅ granted — no new scope needed |
+| Performance Marketing — leads/funnel | `crm.objects.contacts.read` (meetings read is bundled with it on this portal) | ✅ granted — no new scope needed |
+| Performance Marketing — ad spend / live campaigns | `marketing.campaigns.read` | ❌ not available on current plan |
 
 Add scopes in the HubSpot Private App UI; no redeploy is needed, the token is
 read fresh on every request.
 
-## Lead Sources — why it exists instead of a Marketing Campaigns module
+## Performance Marketing — two independently-gated data sources
 
-`marketing.campaigns.read` isn't available on the current HubSpot plan (not
-just ungranted — it wasn't selectable in the Private App scope picker), so a
-real Campaigns-API-backed module isn't buildable today. Rather than leave a
-permanently scope-blocked page, `api/sources/index.js` gets equivalent —
-arguably more actionable — data from the contacts object, which the app
-already has full access to:
+The page combines two things that come from very different places, and
+deliberately doesn't let one block the other:
+
+**Leads, meetings, lifecycle funnel** (`api/sources/index.js`, filtered to
+the LinkedIn channel by `MarketingPage.jsx`) — built from the contacts
+object, which the app already has full access to:
 
 - `hs_analytics_source_data_1` — the ad network/channel a contact came from
   (e.g. `"LinkedIn"`); falls back to `hs_analytics_source` (e.g.
   `PAID_SOCIAL`, `ORGANIC_SEARCH`) when not set.
 - `hs_analytics_source_data_2` — the specific campaign/ad name. This is what
-  stands in for "campaign" — there's no campaign object, but this field is
-  populated per-contact and shown per-lead in the table.
+  stands in for "campaign" in the leads table — there's no campaign object,
+  but this field is populated per-contact.
 - `lifecyclestage` — pulled live from `crm/v3/properties/contacts/lifecyclestage`
   (not hardcoded) so the funnel matches this portal's actual stages and order.
 - Meetings — the Meetings CRM object is fetched directly (small: tens, not
   thousands, of records) and associated back to contacts, giving a real
-  meetings-booked count per lead/channel instead of relying on the
+  meetings-booked count per lead instead of relying on the
   `engagements_last_meeting_booked` contact property, which is unpopulated on
   this portal.
 
-If `marketing.campaigns.read` becomes available later, a proper
-`api/campaigns/` module can be added alongside this one (see "Adding a new
-module" above) rather than replacing it — Lead Sources answers "which channel
-brought this lead," which Campaigns data doesn't fully replace anyway.
+**Ad spend / live campaign count** (`api/marketing/spend.js`) — needs
+`marketing.campaigns.read`, confirmed not selectable on the current HubSpot
+plan (same scope, same result, as when this was checked for a full Marketing
+Campaigns module — see below). There's no separate standalone "Ads API" to
+fall back on: HubSpot's own community docs confirm ad spend/budget only
+surfaces via a Campaign's budget-items once an ad account is synced onto it,
+so this is gated on the exact same scope as Campaigns. Two ways to unblock
+it: get `marketing.campaigns.read` granted (a HubSpot plan question), or
+build a direct LinkedIn Ads (Campaign Manager) API integration instead — a
+separate OAuth app + credentials, not a scope toggle on the existing token.
+`api/marketing/spend.js` is wired up to start working the moment the first
+option lands; the second would replace it with a new client rather than
+extend it.
+
+If `marketing.campaigns.read` becomes available later, a fuller Campaigns
+module can be added alongside Performance Marketing (see "Adding a new
+module" above) — channel-attribution data from contacts and true
+per-campaign data from the Campaigns API answer different questions and
+don't need to replace each other.
 
 ## Known, accepted risks
 
@@ -200,9 +217,9 @@ between them — the pause was defensive throttling left over from when these
 ran back-to-back; removing it and cutting the remaining inter-batch pacing
 from 350ms to 150ms (`lib/hubspot.js`) is safe for the request volumes these
 ID-batch lookups actually generate. This is a different situation from the
-concurrent-pagination collision noted below for Lead Sources — that was two
-*paginated* loops (many sequential requests each) racing each other; ABM's
-segment fetches are a small, fixed number of batches, not pagination.
+concurrent-pagination collision noted in `api/sources/index.js` — that was
+two *paginated* loops (many sequential requests each) racing each other;
+ABM's segment fetches are a small, fixed number of batches, not pagination.
 
 ## Email funnel data source
 

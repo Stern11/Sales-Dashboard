@@ -4,7 +4,7 @@ import { useTheme } from "../hooks/useTheme.js";
 const MODULES = [
   { to: "/abm", label: "ABM Outreach" },
   { to: "/pipeline", label: "Sales Pipeline" },
-  { to: "/sources", label: "Lead Sources" },
+  { to: "/marketing", label: "Performance Marketing" },
 ];
 
 export function TopNav() {
