@@ -6,6 +6,9 @@ import { PeriodToggle } from "../../components/PeriodToggle.jsx";
 import { PageMeta } from "../../components/TopNav.jsx";
 import { AdLeadsTable } from "./AdLeadsTable.jsx";
 import { useAdLeadsData, useAdSpendData } from "./useMarketingData.js";
+import { usePipelineCheck, marketingLeadToPipelinePrefill } from "../../lib/pipelineIntegration.js";
+import { usePipelineMutations } from "../pipeline/usePipelineMutations.js";
+import { useNameTagContext } from "../../context/NameTagContext.jsx";
 
 const PERIOD_OPTIONS = [
   { value: "lifetime", label: "Lifetime" },
@@ -51,6 +54,43 @@ export function MarketingPage() {
   const demoCallCount = demoCallIdx >= 0 ? adLeads.filter((l) => stageIdx(l.lifecycle_stage) >= demoCallIdx).length : 0;
   const sqlCount = sqlIdx >= 0 ? adLeads.filter((l) => stageIdx(l.lifecycle_stage) >= sqlIdx).length : 0;
 
+  const contactIds = useMemo(() => adLeads.map((l) => l.contact_id), [adLeads]);
+  const { inPipeline, refresh: refreshPipelineCheck } = usePipelineCheck(contactIds);
+  const { createLead } = usePipelineMutations();
+  const { ensureName } = useNameTagContext();
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const [bulkStatus, setBulkStatus] = useState(null);
+
+  function toggleSelect(contactId) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(contactId)) next.delete(contactId); else next.add(contactId);
+      return next;
+    });
+  }
+
+  async function handleBulkAdd() {
+    const actor = await ensureName();
+    if (!actor) return;
+    setBulkLoading(true);
+    setBulkStatus(null);
+    const toAdd = adLeads.filter((l) => selectedIds.has(l.contact_id));
+    let added = 0, skipped = 0;
+    for (const lead of toAdd) {
+      try {
+        await createLead(marketingLeadToPipelinePrefill(lead), actor);
+        added++;
+      } catch {
+        skipped++;
+      }
+    }
+    setBulkLoading(false);
+    setSelectedIds(new Set());
+    refreshPipelineCheck();
+    setBulkStatus(`Added ${added} lead${added === 1 ? "" : "s"} to the pipeline.${skipped ? ` ${skipped} skipped (already in pipeline).` : ""} Company names were guessed from email domain — check them in the pipeline.`);
+  }
+
   return (
     <div>
       <PeriodToggle options={PERIOD_OPTIONS} value={period} onChange={setPeriod} />
@@ -87,7 +127,27 @@ export function MarketingPage() {
             </section>
             <section>
               <h2>LinkedIn Ad Leads ({adLeads.length})</h2>
-              <AdLeadsTable leads={adLeads} stageLabel={stageLabel} />
+              <p className="subtitle" style={{ marginBottom: 10 }}>
+                Check the Pipeline column to select leads, then add them in bulk. This data has
+                no company field — company name is guessed from the email domain and worth double-checking after adding.
+              </p>
+              {selectedIds.size > 0 && (
+                <div className="bulk-action-bar">
+                  <span>{selectedIds.size} selected</span>
+                  <button type="button" className="btn btn-primary" onClick={handleBulkAdd} disabled={bulkLoading}>
+                    {bulkLoading ? "Adding…" : `Add ${selectedIds.size} to Pipeline`}
+                  </button>
+                  <button type="button" className="btn" onClick={() => setSelectedIds(new Set())}>Clear</button>
+                </div>
+              )}
+              {bulkStatus && <p className="subtitle" style={{ marginBottom: 10 }}>{bulkStatus}</p>}
+              <AdLeadsTable
+                leads={adLeads}
+                stageLabel={stageLabel}
+                pipelineStatus={inPipeline}
+                selectedIds={selectedIds}
+                onToggleSelect={toggleSelect}
+              />
             </section>
           </>
         )}

@@ -12,15 +12,21 @@ a `src/modules/<name>` page built from shared `src/components`.
 - **Backend**: Vercel serverless functions (`api/**/*.js`), one file per
   route. No framework (Express, etc.) — each file exports a plain
   `(req, res) => {}` handler, per Vercel's convention.
-- **Data**: HubSpot, fetched fresh on every request (no database, no
-  scheduled sync). Responses are edge-cached 5 minutes
-  (`s-maxage=300, stale-while-revalidate=60`) so concurrent viewers don't each
-  trigger a fresh HubSpot call.
-- **Styling**: plain CSS custom properties (`src/styles/tokens.css`) + one
-  shared stylesheet (`src/styles/global.css`). No CSS-in-JS, no chart
-  library — funnels and trends are plain divs positioned by percentage
-  (`FunnelChart`, `TrendChart`), which is simple enough for this app's charts
-  and keeps the dependency footprint small.
+- **Data**: HubSpot, fetched fresh on every request (no scheduled sync).
+  Responses are edge-cached 5 minutes (`s-maxage=300,
+  stale-while-revalidate=60`) so concurrent viewers don't each trigger a
+  fresh HubSpot call. The **Sales Pipeline module is the one exception** — it
+  is backed by a real Postgres database (Neon), the app's only persistent,
+  writable datastore; its responses are `Cache-Control: no-store` since it's
+  mutable operational data, not a HubSpot mirror. See "Sales Pipeline data
+  model" below.
+- **Styling**: plain CSS custom properties (`src/styles/tokens.css`) + two
+  stylesheets — `src/styles/global.css` (everything pre-dating Sales
+  Pipeline) and `src/styles/pipeline.css` (kanban board, modal/drawer,
+  forms — new, large enough surface area to warrant its own file). No
+  CSS-in-JS. Funnels are plain divs positioned by percentage (`FunnelChart`),
+  which is simple enough for this app's charts and keeps the dependency
+  footprint small.
 
 ## Why `lib/` is not under `api/`
 
@@ -32,40 +38,64 @@ mistaken for a route. Only files that are meant to be hit as
 
 ```
 api/
-  segments.js          → GET /api/segments
-  abm/index.js          → GET /api/abm?segment=<id>
-  pipeline/index.js     → GET /api/pipeline?period=<weekly|monthly>
-  sources/index.js      → GET /api/sources?period=<lifetime|monthly|weekly> (channel attribution, all channels — Performance Marketing filters to LinkedIn)
-  marketing/spend.js    → GET /api/marketing/spend (ad spend + live campaign count — scope-blocked, see below)
+  segments.js             → GET /api/segments
+  abm/index.js             → GET /api/abm?segment=<id>
+  sources/index.js         → GET /api/sources?period=<lifetime|monthly|weekly> (channel attribution, all channels — Performance Marketing filters to LinkedIn)
+  marketing/spend.js       → GET /api/marketing/spend (ad spend + live campaign count — scope-blocked, see below)
+  pipeline/index.js        → GET/POST /api/pipeline (list+summary / create) — database-backed, not HubSpot
+  pipeline/[id]/index.js   → GET/PATCH /api/pipeline/:id (detail / edit fields)
+  pipeline/[id]/stage.js   → POST /api/pipeline/:id/stage (stage change, incl. cold/lost/revive)
+  pipeline/[id]/notes.js   → POST /api/pipeline/:id/notes (append a note)
+  pipeline/check.js        → GET /api/pipeline/check?contact_ids=... (bulk "already in pipeline" lookup)
 
 lib/
-  hubspot.js             HubSpot API client: auth, batched/paged search,
+  hubspot.js              HubSpot API client: auth, batched/paged search,
                           associations, 429 backoff, scope-error detection
-  respond.js              shared response helpers (cache headers, error mapping)
-  dateBuckets.js          weekly/monthly trend bucketing (used by Pipeline)
+  respond.js              shared response helpers (cache headers, error mapping) — HubSpot modules only
+  db.js                   Neon (Postgres) client getter for the Sales Pipeline module
   abm.js                  ABM shaping logic (buildAbmPayload) for api/abm/index.js
   abm-segments/
     index.js              registry of all ABM segments
     logistics.js           real data: 50 companies / 165 leads
     health-and-personal-care.js  real data: 35 companies / 270 leads
     cpg.js, fnb.js         stubs — empty until populated
+  pipeline/
+    constants.js            stage/scale/source vocabulary
+    queries.js               all SQL for the pipeline_leads/notes/stage_history tables
+    respond.js                DB error → HTTP status mapping (mirrors lib/respond.js)
+
+db/
+  schema.sql              source of truth for the Sales Pipeline Postgres schema — run by hand, no migration framework
 
 src/
-  main.jsx, App.jsx        entry + router + layout
+  main.jsx, App.jsx        entry + router + layout (App.jsx also mounts NameTagProvider)
   components/               shared UI, used by 2+ modules
-    KpiRow, FunnelChart, TrendChart, DataTable, PeriodToggle, StatusPill,
-    AsyncState, TopNav
+    KpiRow, FunnelChart, DataTable, PeriodToggle, StatusPill, AsyncState,
+    TopNav, Overlay, Modal, Drawer, NameTagModal
   modules/
     abm/        AbmPage, LeadTable, useAbmData (includes useAllAbmData — see below)
-    pipeline/   PipelinePage, DealsTable, usePipelineData
+    pipeline/   PipelinePage, KanbanBoard/Column, LeadCard, PipelineTable,
+                LeadDetailDrawer, LeadFieldsForm, AddLeadModal,
+                StageChangeModal, NotesTimeline, usePipelineData,
+                usePipelineMutations, constants.js
     marketing/  MarketingPage, AdLeadsTable, useMarketingData (Performance Marketing)
   hooks/
-    useApiData    generic {data, loading, error, refresh} fetch, cached +
-                  stale-while-revalidate, 5min background poll
-    useTheme      light/dark toggle, persisted to localStorage
+    useApiData      generic {data, loading, error, refresh} fetch, cached +
+                    stale-while-revalidate, 5min background poll — read-only
+    useApiMutation  generic {mutate, loading, error} POST/PATCH wrapper — the
+                    app's only mutation primitive, used by the pipeline module
+    useTheme        light/dark toggle, persisted to localStorage
+    useNameTag      honor-system identity for pipeline attribution, persisted
+                    to localStorage
+  context/
+    NameTagContext.jsx  ensureName() gate — prompts once via NameTagModal if
+                        no name is stored yet, mounted at the app root
   lib/
-    apiCache.js    sessionStorage read/write used by useApiData (and
-                  useAllAbmData) for the stale-while-revalidate cache
+    apiCache.js             sessionStorage read/write used by useApiData (and
+                            useAllAbmData) for the stale-while-revalidate cache
+    pipelineIntegration.js   the one cross-module seam — usePipelineCheck +
+                            prefill helpers used by AbmPage/MarketingPage's
+                            "Add to pipeline" action
 ```
 
 `DataTable` is the biggest reuse win: every table in the app (leads, deals,
@@ -78,16 +108,26 @@ just filtering the one table rather than a redundant second listing.
 
 ## Adding a new module
 
+For a typical **read-only HubSpot** module:
+
 1. Backend: `api/<module>/index.js` — read query params, call `getToken()`
    from `lib/hubspot.js`, fetch/shape data, return it via
    `withHubspotErrorHandling` from `lib/respond.js` (this gets you the
    missing-token and missing-scope error handling for free).
 2. Frontend: `src/modules/<module>/<Module>Page.jsx` + a
    `use<Module>Data.js` hook (one-liner around `useApiData`). Build the page
-   from `KpiRow` / `FunnelChart` / `TrendChart` / `DataTable` — you shouldn't
-   need new CSS or new chart code for a typical metrics-and-table module.
+   from `KpiRow` / `FunnelChart` / `DataTable` — you shouldn't need new CSS
+   or new chart code for a typical metrics-and-table module.
 3. Register the route in `src/App.jsx` and add a nav entry in
    `src/components/TopNav.jsx`'s `MODULES` array.
+
+For a **database-backed, writable** module (so far, only Sales Pipeline is
+one), follow the pattern in `lib/pipeline/` + `api/pipeline/**` instead:
+SQL lives in `lib/<module>/queries.js` behind `lib/db.js`'s `getSql()`,
+errors map through `lib/<module>/respond.js` (`withDbErrorHandling`, mirrors
+`withHubspotErrorHandling`), responses are `Cache-Control: no-store`, and
+mutations on the frontend go through `useApiMutation` rather than
+`useApiData`. Add a `db/schema.sql` migration for any new tables.
 
 ## Adding a new ABM segment (e.g. CPG, F&B)
 
@@ -115,12 +155,61 @@ disappears (no code change needed) if you ever want to hide one.
 |---|---|---|
 | ABM Outreach | `crm.objects.contacts.read`, `crm.objects.companies.read` | ✅ granted |
 | ABM Calling funnel | `crm.objects.calls.read` (bundled with the contacts scope on this portal) | ✅ granted |
-| Sales Pipeline | `crm.objects.deals.read` | ✅ granted |
 | Performance Marketing — leads/funnel | `crm.objects.contacts.read` (meetings read is bundled with it on this portal) | ✅ granted — no new scope needed |
 | Performance Marketing — ad spend / live campaigns | `marketing.campaigns.read` | ❌ not available on current plan |
 
+Sales Pipeline no longer reads from HubSpot at all (see below) — it needs no
+HubSpot scope, only `DATABASE_URL`.
+
 Add scopes in the HubSpot Private App UI; no redeploy is needed, the token is
 read fresh on every request.
+
+## Sales Pipeline data model
+
+Unlike every other module, Sales Pipeline (`/pipeline`) is not a HubSpot
+view — it's a database-backed lead tracker with its own write path, added
+because tracking a deal through SQL → Discovery → Proposal → Commercial →
+Won (with Cold/Lost as side-branches at any active stage) needs fields
+HubSpot doesn't have (deal size, company scale, supply-chain flag, project
+description) and an editable "next steps" notes timeline. It replaced an
+earlier version of this page that was a read-only view of live HubSpot
+deals — that concept didn't match how deals are actually tracked here and
+was dropped, not extended.
+
+- **Schema**: `db/schema.sql` — three tables. `pipeline_leads` (one row per
+  lead, current `stage` + a denormalized `prior_active_stage` for reviving
+  from Cold/Lost), `pipeline_lead_notes` (append-only — a separate table
+  rather than a JSONB array specifically so two people adding a note at once
+  can't race and drop one — see the file's comments), `pipeline_lead_stage_history`
+  (one row per stage transition, written by the same code path that updates
+  `pipeline_leads.stage` so it's never bypassed — powers future
+  time-in-stage/conversion reporting, not just the live counts).
+- **Access**: `lib/db.js` (`getSql()`, Neon's HTTP driver — no connection
+  pool to manage, suits short-lived serverless calls) → `lib/pipeline/queries.js`
+  (all SQL) → `api/pipeline/**` route handlers. `source`/`company_scale` are
+  free text validated in `lib/pipeline/constants.js`, not DB enums, so adding
+  a new option is a one-file change; `stage` values ARE a DB `CHECK`
+  constraint since the cold/lost branching logic depends on the vocabulary
+  being fixed.
+- **Adding a lead from ABM/Marketing**: "Add to pipeline" in `LeadTable.jsx`/
+  `AdLeadsTable.jsx` is a **snapshot copy**, not a move — the source lead
+  stays in its original table. `src/lib/pipelineIntegration.js` is the one
+  place ABM/Marketing code touches pipeline data (a bulk `hubspot_contact_id`
+  check, so an already-added lead shows an "In Pipeline" badge instead of a
+  duplicate-add button).
+- **Attribution without login**: the whole app has no authentication.
+  Pipeline writes are attributed by a name typed once into
+  `NameTagModal`/`NameTagContext` and stored in `localStorage` — an honor
+  system, not access control. Anyone with the dashboard URL can create/edit
+  pipeline leads, same as they can already view everything else.
+- **Hard delete exists, gated by a server-enforced confirmation**: `DELETE
+  /api/pipeline/:id` requires `confirm_company_name` to exactly match the
+  lead's current company name (checked server-side, not just in the UI) —
+  see `DeleteLeadModal.jsx`. There's still no soft-delete/trash — once
+  confirmed, the row and its notes/stage history (cascade) are gone for
+  good. This is the one place in the module where a mistake genuinely can't
+  be undone; the type-to-confirm step is the only safeguard, given there's
+  no real access control.
 
 ## Performance Marketing — two independently-gated data sources
 

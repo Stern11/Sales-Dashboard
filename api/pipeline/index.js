@@ -1,88 +1,50 @@
-// GET /api/pipeline?period=weekly|monthly — live Sales Pipeline data: stage
-// funnel (open deal count + value per stage), a new-deals-created and
-// closed-won-value trend, and the underlying deal list.
+// GET /api/pipeline — full lead list + stage-count summary for the board/list view.
+// POST /api/pipeline — create a lead (manual entry, or "Add to pipeline" from
+// ABM/Marketing with hubspot_contact_id/hubspot_origin_module/source_locked set).
 //
-// Requires the `crm.objects.deals.read` scope on the HubSpot Private App —
-// not granted as of this build (see docs/ARCHITECTURE.md). Until it's added,
-// this renders a clear "missing scope" message instead of a raw 500.
+// This replaces the old HubSpot-deals-backed Sales Pipeline endpoint — the
+// pipeline is now a database-backed lead tracker, not a live HubSpot view.
+// See db/schema.sql for the data model.
 
-import { getToken, hubspotGet, hubspotSearchAll } from "../../lib/hubspot.js";
-import { withHubspotErrorHandling } from "../../lib/respond.js";
-import { buildPeriodBuckets, bucketIndexFor } from "../../lib/dateBuckets.js";
+import { withDbErrorHandling, ValidationError, ConflictError } from "../../lib/pipeline/respond.js";
+import { listLeads, createLead, checkContactIds } from "../../lib/pipeline/queries.js";
+import { isValidCompanyScale, isValidPriority } from "../../lib/pipeline/constants.js";
 
-const DEAL_PROPERTIES = [
-  "dealname", "amount", "dealstage", "pipeline", "createdate", "closedate",
-  "hs_is_closed_won", "hs_is_closed_lost",
-];
-
-const currency = new Intl.NumberFormat(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 });
-
-async function buildPipelinePayload(token, period) {
-  const pipelinesRes = await hubspotGet(token, "/crm/v3/pipelines/deals");
-  const stageLabel = {};
-  const stageOrder = [];
-  for (const pipeline of pipelinesRes.results || []) {
-    for (const stage of pipeline.stages || []) {
-      stageLabel[stage.id] = stage.label;
-      stageOrder.push(stage.id);
-    }
-  }
-
-  const deals = await hubspotSearchAll(token, "deals", {
-    properties: DEAL_PROPERTIES,
-    sorts: [{ propertyName: "createdate", direction: "DESCENDING" }],
-  });
-
-  const dealsOut = deals.map((d) => {
-    const p = d.properties || {};
-    return {
-      id: d.id,
-      name: p.dealname || "(unnamed deal)",
-      stage: stageLabel[p.dealstage] || p.dealstage || "Unknown",
-      amount: Number(p.amount) || 0,
-      created_at: p.createdate || null,
-      close_date: p.closedate || null,
-      is_closed_won: p.hs_is_closed_won === "true",
-      is_closed_lost: p.hs_is_closed_lost === "true",
-    };
-  });
-
-  const openDeals = dealsOut.filter((d) => !d.is_closed_won && !d.is_closed_lost);
-  const stage_funnel = [...new Set(stageOrder)]
-    .map((id) => stageLabel[id])
-    .filter((label, i, arr) => arr.indexOf(label) === i)
-    .map((label) => {
-      const inStage = openDeals.filter((d) => d.stage === label);
-      return { stage: label, count: inStage.length, formatted: currency.format(inStage.reduce((sum, d) => sum + d.amount, 0)) };
-    })
-    .filter((s) => s.count > 0 || stageOrder.length <= 10); // keep short pipelines fully visible even with empty stages
-
-  const bucketCount = period === "monthly" ? 6 : 8;
-  const buckets = buildPeriodBuckets(period, bucketCount);
-  const newDealsTrend = buckets.map((b) => ({ label: b.label, value: 0 }));
-  const closedWonTrend = buckets.map((b) => ({ label: b.label, value: 0 }));
-  for (const d of dealsOut) {
-    const createdIdx = bucketIndexFor(d.created_at, buckets);
-    if (createdIdx >= 0) newDealsTrend[createdIdx].value += 1;
-    if (d.is_closed_won) {
-      const closedIdx = bucketIndexFor(d.close_date, buckets);
-      if (closedIdx >= 0) closedWonTrend[closedIdx].value += d.amount;
-    }
-  }
-  closedWonTrend.forEach((p) => { p.formatted = currency.format(p.value); });
-
-  const summary = {
-    total_open_deals: openDeals.length,
-    total_open_value: currency.format(openDeals.reduce((sum, d) => sum + d.amount, 0)),
-    total_closed_won: dealsOut.filter((d) => d.is_closed_won).length,
-    total_closed_lost: dealsOut.filter((d) => d.is_closed_lost).length,
-    stage_funnel,
-  };
-
-  return { period, summary, new_deals_trend: newDealsTrend, closed_won_trend: closedWonTrend, deals: dealsOut };
+function validateCreateBody(body) {
+  const { company_name, contact_name, source, actor, company_scale, priority } = body || {};
+  if (!company_name || !String(company_name).trim()) throw new ValidationError("company_name is required.");
+  if (!contact_name || !String(contact_name).trim()) throw new ValidationError("contact_name is required.");
+  if (!source || !String(source).trim()) throw new ValidationError("source is required.");
+  if (!actor || !String(actor).trim()) throw new ValidationError("actor (name tag) is required.");
+  if (!isValidCompanyScale(company_scale)) throw new ValidationError("Invalid company_scale.");
+  if (priority !== undefined && !isValidPriority(priority)) throw new ValidationError("Invalid priority.");
 }
 
 export default async function handler(req, res) {
-  const period = req.query.period === "monthly" ? "monthly" : "weekly";
-  await withHubspotErrorHandling(res, () => buildPipelinePayload(getToken(), period));
+  if (req.method === "GET") {
+    await withDbErrorHandling(res, () => listLeads());
+    return;
+  }
+
+  if (req.method === "POST") {
+    await withDbErrorHandling(res, async () => {
+      validateCreateBody(req.body);
+      const { hubspot_contact_id } = req.body;
+      if (hubspot_contact_id) {
+        const existing = await checkContactIds([String(hubspot_contact_id)]);
+        if (existing.length) {
+          throw new ConflictError("A pipeline lead for this contact already exists.", {
+            id: existing[0].id,
+            stage: existing[0].stage,
+          });
+        }
+      }
+      const lead = await createLead(req.body);
+      return { lead };
+    });
+    return;
+  }
+
+  res.setHeader("Allow", "GET, POST");
+  res.status(405).json({ error: `Method ${req.method} not allowed.` });
 }

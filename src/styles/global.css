@@ -89,6 +89,7 @@ thead th.sorted::after { content: " \25be"; }
 tbody td { padding: 7px 10px; border-bottom: 1px solid var(--gridline); vertical-align: top; color: var(--text-primary); }
 tbody tr:last-child td { border-bottom: none; }
 tbody tr:hover { background: var(--page-plane); }
+tbody tr.row-clickable { cursor: pointer; }
 td.name-cell { font-weight: 600; white-space: nowrap; }
 a.li-link { color: var(--seq-450); text-decoration: none; font-size: 12px; font-weight: 600; }
 a.li-link:hover { text-decoration: underline; }
@@ -97,11 +98,35 @@ a.li-link:hover { text-decoration: underline; }
 .pill-missing { background: var(--pill-missing-bg); color: var(--status-critical); }
 .pill-notstarted { background: var(--page-plane); color: var(--text-muted); border: 1px solid var(--border); }
 .pill-stage { background: var(--pill-stage-bg); color: var(--pill-stage-text); }
+.pill-cold { background: var(--pill-cold-bg); color: var(--pill-cold-text); }
+.pill-lost { background: var(--pill-lost-bg); color: var(--pill-lost-text); }
+.pill-supplychain { background: var(--pill-supplychain-bg); color: var(--pill-supplychain-text); }
+
+/* Compact multi-badge status indicator (ABM lead table's "Outreach" column) —
+   same color language as .pill-*, sized down to a small square instead of a
+   full pill so 4 channel statuses fit in one cell instead of 4 columns. */
+.mini-badge-row { display: flex; gap: 3px; }
+.mini-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; border-radius: 5px; font-size: 10px; font-weight: 700;
+  cursor: default;
+}
+.mini-badge.pill-ready { background: var(--pill-ready-bg); color: var(--success-text); }
+.mini-badge.pill-missing { background: var(--pill-missing-bg); color: var(--status-critical); }
+.mini-badge.pill-notstarted { background: var(--page-plane); color: var(--text-muted); border: 1px solid var(--border); }
+.mini-badge.pill-stage { background: var(--pill-stage-bg); color: var(--pill-stage-text); }
 .flag-icon { color: var(--status-warning); font-weight: 700; margin-right: 3px; cursor: help; }
 .row-count { font-size: 11.5px; color: var(--text-muted); margin-top: 8px; }
 .table-scroll { max-height: 560px; overflow: auto; border-radius: 10px; }
 .table-scroll table { border-radius: 0; }
 .table-scroll thead th { position: sticky; top: 0; z-index: 2; }
+
+/* Bulk-select action bar (ABM/Marketing "Add to pipeline" retrofit) */
+.bulk-action-bar {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 10px; padding: 8px 12px;
+  background: var(--pill-stage-bg); border: 1px solid var(--seq-450); border-radius: 8px; font-size: 12.5px;
+}
+.bulk-action-bar .btn { margin: 0; }
 
 .loading, .error, .empty { padding: 40px; text-align: center; color: var(--text-secondary); font-size: 13px; }
 .error { color: var(--status-critical); }

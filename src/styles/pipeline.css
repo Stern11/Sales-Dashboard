@@ -1,0 +1,144 @@
+/* Sales Pipeline module — kanban board, modal/drawer primitives, forms.
+   Split from global.css given the size of this module's new surface area
+   (board, modal, drawer, notes timeline); everything here is either
+   pipeline-specific or (Overlay/Modal/Drawer) has no other consumer yet. */
+
+/* Overlay / Modal / Drawer */
+.overlay-backdrop {
+  position: fixed; inset: 0; background: var(--overlay-scrim);
+  display: flex; z-index: 100;
+}
+.overlay-center { align-items: center; justify-content: center; padding: 20px; }
+.overlay-drawer { justify-content: flex-end; }
+
+.modal-card {
+  background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px;
+  width: 100%; max-width: 460px; max-height: 90vh; display: flex; flex-direction: column;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.25);
+}
+.modal-card-wide { max-width: 620px; }
+.modal-header, .drawer-panel .modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 18px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.modal-header h3 { margin: 0; font-size: 14px; color: var(--text-primary); }
+.modal-body { padding: 18px; overflow-y: auto; }
+.icon-btn {
+  border: none; background: transparent; color: var(--text-muted); font-size: 18px;
+  line-height: 1; cursor: pointer; padding: 2px 6px; border-radius: 6px;
+}
+.icon-btn:hover { color: var(--text-primary); background: var(--page-plane); }
+
+.drawer-panel {
+  background: var(--surface-1); border-left: 1px solid var(--border); height: 100%;
+  width: 100%; max-width: 480px; display: flex; flex-direction: column;
+  box-shadow: -12px 0 30px rgba(0,0,0,0.15);
+}
+.drawer-body { padding: 18px; overflow-y: auto; flex: 1; }
+
+/* Forms */
+.form-grid { display: flex; flex-direction: column; gap: 14px; }
+.form-row { display: flex; gap: 12px; }
+.form-row > label { flex: 1; }
+.form-grid label {
+  display: flex; flex-direction: column; gap: 5px; font-size: 12px;
+  color: var(--text-secondary); font-weight: 600;
+}
+.form-grid input[type="text"], .form-grid input[type="email"], .form-grid input[type="tel"],
+.form-grid input[type="number"], .form-grid select, .form-grid textarea {
+  border: 1px solid var(--border); background: var(--page-plane); color: var(--text-primary);
+  border-radius: 6px; padding: 8px 10px; font-size: 13px; font-family: inherit; font-weight: 400;
+}
+.form-grid textarea { resize: vertical; min-height: 70px; }
+.checkbox-row { flex-direction: row !important; align-items: center; gap: 8px !important; }
+.checkbox-row input { width: auto; }
+.form-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.btn-primary { background: var(--seq-450); border-color: var(--seq-450); color: #fff; }
+.btn-primary:hover { filter: brightness(1.08); border-color: var(--seq-450); }
+.btn-danger { color: var(--status-critical); }
+.btn-danger-solid { background: var(--status-critical); border-color: var(--status-critical); color: #fff; }
+.btn-danger-solid:hover:not(:disabled) { filter: brightness(1.1); border-color: var(--status-critical); }
+.btn-danger-solid:disabled { opacity: 0.5; cursor: not-allowed; }
+.form-error { color: var(--status-critical); font-size: 12px; margin: -4px 0 0; }
+
+/* Pipeline page toolbar */
+.pipeline-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+
+/* Kanban board */
+.kanban-board-toolbar { display: flex; justify-content: flex-end; margin-bottom: 10px; }
+/* Fixed-width columns (flex: 0 0 <width>, not 1 0 — no grow) so a handful of
+   columns don't stretch to fill the available width and end up mostly
+   empty. Stays inside the page's normal max-width; if 5+ columns don't fit
+   the viewport, the board scrolls horizontally on its own, same pattern as
+   DataTable's .table-scroll elsewhere in the app — it doesn't affect the
+   rest of the page's layout. */
+.kanban-board { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 6px; }
+.kanban-column {
+  background: var(--page-plane); border: 1px solid var(--border); border-radius: 10px;
+  width: 230px; flex: 0 0 230px; display: flex; flex-direction: column; max-height: 72vh;
+}
+.kanban-column.is-side-state { background: transparent; }
+.kanban-column-header {
+  display: flex; align-items: center; gap: 7px;
+  padding: 10px 12px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.kanban-column-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.kanban-column-title { font-size: 12px; font-weight: 700; color: var(--text-primary); text-transform: uppercase; letter-spacing: 0.02em; flex: 1; }
+.kanban-column-count { font-size: 11px; color: var(--text-muted); }
+.kanban-column-value { font-size: 10.5px; color: var(--text-muted); padding: 0 12px 8px; }
+.kanban-column-body { padding: 8px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 8px; transition: background-color .1s; }
+.kanban-column-body.is-drag-over { background: var(--pill-stage-bg); outline: 2px dashed var(--seq-450); outline-offset: -4px; }
+.kanban-column-empty { font-size: 11.5px; color: var(--text-muted); text-align: center; padding: 14px 6px; }
+
+.lead-card {
+  background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px 12px; cursor: grab; text-align: left; width: 100%;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.lead-card:hover { border-color: var(--seq-450); }
+.lead-card.is-dragging { opacity: 0.4; }
+.lead-card:active { cursor: grabbing; }
+.lead-card-company { font-size: 12.5px; font-weight: 700; color: var(--text-primary); }
+.lead-card-contact { font-size: 11.5px; color: var(--text-secondary); }
+.lead-card-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 2px; }
+.lead-card-deal-size { font-size: 11.5px; font-weight: 600; color: var(--text-primary); }
+.lead-card-updated { font-size: 10.5px; color: var(--text-muted); margin-top: 2px; }
+
+
+.stage-menu { display: inline-block; }
+/* Rendered via a portal into document.body (see LeadCard.jsx's StageMenu) —
+   position:fixed with top/left set inline from the trigger button's own
+   bounding rect, so it's never clipped by an ancestor's overflow:auto (the
+   kanban column body and the detail drawer both have one). */
+.stage-menu-list {
+  position: fixed; z-index: 200; min-width: 160px;
+  background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.18); padding: 4px; display: flex; flex-direction: column;
+}
+.stage-menu-list button {
+  border: none; background: transparent; color: var(--text-primary); text-align: left;
+  padding: 7px 9px; font-size: 12px; border-radius: 5px; cursor: pointer;
+}
+.stage-menu-list button:hover { background: var(--page-plane); }
+.stage-menu-list button.danger { color: var(--status-critical); }
+.stage-menu-list hr { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
+
+/* Lead detail drawer */
+.lead-detail-section { margin-bottom: 20px; }
+.lead-detail-section h4 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-muted); margin: 0 0 10px; }
+.lead-detail-danger-zone { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); }
+.lead-detail-danger-zone .btn { margin-left: 0; }
+.lead-detail-current-stage { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+
+/* Notes timeline */
+.notes-timeline { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+.note-item { border: 1px solid var(--border); border-radius: 8px; padding: 9px 11px; background: var(--page-plane); }
+.note-item-meta { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--text-muted); margin-bottom: 4px; }
+.note-item-body { font-size: 12.5px; color: var(--text-primary); white-space: pre-wrap; }
+.notes-empty { font-size: 12px; color: var(--text-muted); }
+.add-note-form { display: flex; flex-direction: column; gap: 8px; }
+
+
+@media (max-width: 900px) {
+  .drawer-panel { max-width: 100%; }
+}

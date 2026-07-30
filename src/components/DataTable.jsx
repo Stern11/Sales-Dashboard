@@ -12,8 +12,11 @@ import { useMemo, useState } from "react";
  *   and the displayed label; pass {value, label} when the underlying value
  *   (e.g. a raw HubSpot enum like "opportunity") isn't human-readable on its own.
  * defaultSort?: { key, dir: 1 | -1 }
+ * onRowClick?(row): if provided, the whole row becomes clickable (not just
+ *   whatever a column's render() makes interactive) — opt-in, so tables that
+ *   don't pass it are unaffected.
  */
-export function DataTable({ columns, rows, rowKey, searchPlaceholder, searchKeys, filters, defaultSort }) {
+export function DataTable({ columns, rows, rowKey, searchPlaceholder, searchKeys, filters, defaultSort, onRowClick }) {
   const [query, setQuery] = useState("");
   const [filterValues, setFilterValues] = useState({});
   const [sort, setSort] = useState(defaultSort || { key: columns[0]?.key, dir: 1 });
@@ -93,7 +96,11 @@ export function DataTable({ columns, rows, rowKey, searchPlaceholder, searchKeys
           </thead>
           <tbody>
             {sorted.map((row) => (
-              <tr key={rowKey(row)}>
+              <tr
+                key={rowKey(row)}
+                className={onRowClick ? "row-clickable" : undefined}
+                onClick={onRowClick ? () => onRowClick(row) : undefined}
+              >
                 {columns.map((c) => (
                   <td key={c.key} className={c.nameCell ? "name-cell" : undefined}>
                     {c.render ? c.render(row) : row[c.key] ?? "—"}

@@ -3,6 +3,9 @@ const VARIANTS = {
   missing: "pill-missing",
   notstarted: "pill-notstarted",
   stage: "pill-stage",
+  cold: "pill-cold",
+  lost: "pill-lost",
+  supplychain: "pill-supplychain",
 };
 
 export function StatusPill({ variant, children }) {

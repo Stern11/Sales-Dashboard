@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { DataTable } from "../../components/DataTable.jsx";
 import { StatusPill } from "../../components/StatusPill.jsx";
 
@@ -11,28 +11,55 @@ const EMAIL_PILL_VARIANT = {
   Replied: "ready",
 };
 
-function EmailPill({ lead }) {
-  return <StatusPill variant={EMAIL_PILL_VARIANT[lead.email_funnel_stage] || "stage"}>{lead.email_funnel_stage}</StatusPill>;
+function callingVariant(lead) {
+  if (lead.calling_status === "Not Called") return "notstarted";
+  if (lead.calling_status === "Connected") return "ready";
+  return "stage";
 }
 
-function LinkedInPill({ lead }) {
-  if (!lead.linkedin_reachout_status) return <StatusPill variant="notstarted">Not Started</StatusPill>;
-  return <StatusPill variant="stage">{lead.linkedin_reachout_status}</StatusPill>;
+// Collapses the 4 outreach-channel statuses (previously 4 separate pill
+// columns) into one compact cell — full detail is still filterable via the
+// dropdowns above, it's just not repeated as a column per row anymore. Uses
+// the app's own mousemove-tracked .tooltip (same pattern as FunnelChart)
+// rather than a native `title` attribute, which is unreliable on elements
+// this small.
+function OutreachBadges({ lead }) {
+  const [tooltip, setTooltip] = useState(null);
+
+  function badgeProps(text) {
+    return {
+      onMouseMove: (e) => setTooltip({ x: e.clientX + 12, y: e.clientY + 12, text }),
+      onMouseLeave: () => setTooltip(null),
+    };
+  }
+
+  return (
+    <div className="mini-badge-row">
+      <span className={`mini-badge pill-${EMAIL_PILL_VARIANT[lead.email_funnel_stage] || "stage"}`} {...badgeProps(`Email: ${lead.email_funnel_stage}`)}>E</span>
+      <span className={`mini-badge pill-${lead.linkedin_reachout_status ? "stage" : "notstarted"}`} {...badgeProps(`LinkedIn: ${lead.linkedin_reachout_status || "Not Started"}`)}>L</span>
+      <span className={`mini-badge pill-${callingVariant(lead)}`} {...badgeProps(`Calling: ${lead.calling_status}`)}>C</span>
+      <span className={`mini-badge pill-${lead.meeting_done ? "ready" : "notstarted"}`} {...badgeProps(`Meeting: ${lead.meeting_done ? "Done" : "Not Done"}`)}>M</span>
+      {tooltip && (
+        <div className="tooltip" style={{ display: "block", left: tooltip.x, top: tooltip.y }}>{tooltip.text}</div>
+      )}
+    </div>
+  );
 }
 
-function CallingPill({ lead }) {
-  if (lead.calling_status === "Not Called") return <StatusPill variant="notstarted">Not Called</StatusPill>;
-  if (lead.calling_status === "Connected") return <StatusPill variant="ready">Connected</StatusPill>;
-  return <StatusPill variant="stage">Attempted</StatusPill>;
+function PipelineCell({ lead, pipelineStatus, selectedIds, onToggleSelect }) {
+  const status = pipelineStatus?.[String(lead.contact_id)];
+  if (status) return <StatusPill variant="ready">In Pipeline</StatusPill>;
+  return (
+    <input
+      type="checkbox"
+      checked={selectedIds.has(lead.contact_id)}
+      onChange={() => onToggleSelect(lead.contact_id)}
+      title="Select to add to pipeline"
+    />
+  );
 }
 
-function MeetingPill({ lead }) {
-  return lead.meeting_done
-    ? <StatusPill variant="ready">Done</StatusPill>
-    : <StatusPill variant="notstarted">Not Done</StatusPill>;
-}
-
-export function LeadTable({ leads }) {
+export function LeadTable({ leads, pipelineStatus, selectedIds, onToggleSelect }) {
   const rows = useMemo(() => leads.map((l) => ({ ...l, fullname: `${l.first} ${l.last}` })), [leads]);
   const companyOptions = useMemo(() => [...new Set(rows.map((l) => l.company))].sort(), [rows]);
   const statusOptions = ["Not Started", "Request Sent", "Request Accepted", "Message Sent", "Responded", "Meeting Scheduled"];
@@ -72,6 +99,12 @@ export function LeadTable({ leads }) {
         },
       ]}
       columns={[
+        ...(onToggleSelect
+          ? [{
+              key: "pipeline", label: "Pipeline", sortable: false,
+              render: (l) => <PipelineCell lead={l} pipelineStatus={pipelineStatus} selectedIds={selectedIds} onToggleSelect={onToggleSelect} />,
+            }]
+          : []),
         { key: "company", label: "Company" },
         {
           key: "fullname",
@@ -85,22 +118,11 @@ export function LeadTable({ leads }) {
           ),
         },
         { key: "title", label: "Title" },
-        { key: "email_funnel_stage", label: "Email", sortable: false, render: (l) => <EmailPill lead={l} /> },
         {
-          key: "linkedin_reachout_status",
-          label: "LinkedIn Reachout",
+          key: "outreach",
+          label: "Outreach",
           sortable: false,
-          render: (l) => <LinkedInPill lead={l} />,
-        },
-        {
-          key: "calling_status",
-          label: "Calling",
-          render: (l) => <CallingPill lead={l} />,
-        },
-        {
-          key: "meeting_done",
-          label: "Meeting",
-          render: (l) => <MeetingPill lead={l} />,
+          render: (l) => <OutreachBadges lead={l} />,
         },
         {
           key: "linkedin_url",

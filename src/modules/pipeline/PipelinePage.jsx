@@ -1,56 +1,88 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AsyncState } from "../../components/AsyncState.jsx";
 import { KpiRow } from "../../components/KpiRow.jsx";
 import { FunnelChart } from "../../components/FunnelChart.jsx";
-import { TrendChart } from "../../components/TrendChart.jsx";
 import { PeriodToggle } from "../../components/PeriodToggle.jsx";
 import { PageMeta } from "../../components/TopNav.jsx";
-import { DealsTable } from "./DealsTable.jsx";
-import { usePipelineData } from "./usePipelineData.js";
+import { KanbanBoard } from "./KanbanBoard.jsx";
+import { PipelineTable } from "./PipelineTable.jsx";
+import { LeadDetailDrawer } from "./LeadDetailDrawer.jsx";
+import { AddLeadModal } from "./AddLeadModal.jsx";
+import { usePipelineList } from "./usePipelineData.js";
+import { ACTIVE_STAGES, currency } from "./constants.js";
 
-const PERIOD_OPTIONS = [
-  { value: "weekly", label: "Weekly" },
-  { value: "monthly", label: "Monthly" },
+const VIEW_OPTIONS = [
+  { value: "board", label: "Board" },
+  { value: "list", label: "List" },
 ];
 
 export function PipelinePage() {
-  const [period, setPeriod] = useState("weekly");
-  const { data, loading, error, refresh } = usePipelineData(period);
+  const [view, setView] = useState("board");
+  const [selectedLeadId, setSelectedLeadId] = useState(null);
+  const [addModalOpen, setAddModalOpen] = useState(false);
+  const { data, loading, error, refresh } = usePipelineList();
+
+  // Neon's round-trip is ~1-2s (see docs/ARCHITECTURE.md) — waiting for a
+  // full refetch before a dragged card visually moves feels laggy. This
+  // holds a locally-patched copy of the leads list applied the instant a
+  // drop happens; it's cleared (and server truth takes back over) every
+  // time `data` changes, which happens naturally once the background
+  // refresh() triggered after the real mutation resolves.
+  const [overrideLeads, setOverrideLeads] = useState(null);
+  useEffect(() => { setOverrideLeads(null); }, [data]);
+  const leads = overrideLeads || data?.leads || [];
+
+  function applyOptimisticStage(leadId, toStage) {
+    setOverrideLeads((prev) => (prev || data.leads).map((l) => (l.id === leadId ? { ...l, stage: toStage } : l)));
+  }
 
   return (
     <div>
-      <PeriodToggle options={PERIOD_OPTIONS} value={period} onChange={setPeriod} />
       <AsyncState loading={loading} error={error}>
         {data && (
           <>
-            <PageMeta lastUpdated={data.generated_at} onRefresh={refresh} />
+            <PageMeta lastUpdated={data.generated_at || undefined} onRefresh={refresh} />
             <KpiRow
               items={[
-                { label: "Open Deals", value: data.summary.total_open_deals },
-                { label: "Open Pipeline Value", value: data.summary.total_open_value },
-                { label: "Closed Won", value: data.summary.total_closed_won },
-                { label: "Closed Lost", value: data.summary.total_closed_lost },
+                { label: "Total Leads", value: data.summary.total },
+                { label: "Open Pipeline Value", value: currency.format(data.summary.open_pipeline_value) },
+                { label: "Won", value: data.summary.by_stage.won || 0 },
+                { label: "Cold", value: data.summary.by_stage.cold || 0 },
+                { label: "Lost", value: data.summary.by_stage.lost || 0 },
               ]}
             />
             <section>
               <h2>Open Pipeline by Stage</h2>
-              <FunnelChart stages={data.summary.stage_funnel} />
+              <FunnelChart
+                stages={ACTIVE_STAGES.map((s) => ({ stage: s.label, count: data.summary.by_stage[s.value] || 0 }))}
+              />
             </section>
+            <div className="pipeline-toolbar">
+              <PeriodToggle options={VIEW_OPTIONS} value={view} onChange={setView} />
+              <button type="button" className="btn btn-primary" onClick={() => setAddModalOpen(true)}>+ Add Lead</button>
+            </div>
             <section>
-              <h2>New Deals Created ({period === "monthly" ? "by month" : "by week"})</h2>
-              <TrendChart points={data.new_deals_trend} />
-            </section>
-            <section>
-              <h2>Closed-Won Value ({period === "monthly" ? "by month" : "by week"})</h2>
-              <TrendChart points={data.closed_won_trend} />
-            </section>
-            <section>
-              <h2>All Deals ({data.deals.length})</h2>
-              <DealsTable deals={data.deals} />
+              {view === "board" ? (
+                <KanbanBoard
+                  leads={leads}
+                  onSelect={setSelectedLeadId}
+                  onChanged={refresh}
+                  onOptimisticMove={applyOptimisticStage}
+                />
+              ) : (
+                <PipelineTable leads={leads} onSelect={setSelectedLeadId} />
+              )}
             </section>
           </>
         )}
       </AsyncState>
+
+      {selectedLeadId && (
+        <LeadDetailDrawer leadId={selectedLeadId} onClose={() => setSelectedLeadId(null)} onChanged={refresh} />
+      )}
+      {addModalOpen && (
+        <AddLeadModal onClose={() => setAddModalOpen(false)} onCreated={refresh} />
+      )}
     </div>
   );
 }

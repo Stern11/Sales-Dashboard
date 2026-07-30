@@ -6,6 +6,9 @@ import { PeriodToggle } from "../../components/PeriodToggle.jsx";
 import { PageMeta } from "../../components/TopNav.jsx";
 import { LeadTable } from "./LeadTable.jsx";
 import { useSegments, useAllAbmData } from "./useAbmData.js";
+import { usePipelineCheck, abmLeadToPipelinePrefill } from "../../lib/pipelineIntegration.js";
+import { usePipelineMutations } from "../pipeline/usePipelineMutations.js";
+import { useNameTagContext } from "../../context/NameTagContext.jsx";
 
 function aggregateOverview(payloads) {
   return {
@@ -40,6 +43,47 @@ export function AbmPage() {
     const payloads = Object.values(dataById);
     return payloads.length ? aggregateOverview(payloads) : null;
   }, [dataById]);
+
+  const contactIds = useMemo(() => (data?.leads || []).map((l) => l.contact_id), [data]);
+  const { inPipeline, refresh: refreshPipelineCheck } = usePipelineCheck(contactIds);
+  const { createLead } = usePipelineMutations();
+  const { ensureName } = useNameTagContext();
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const [bulkStatus, setBulkStatus] = useState(null);
+
+  // Selections are per-segment — switching tabs shouldn't carry a stale
+  // selection over to a different lead list.
+  useEffect(() => { setSelectedIds(new Set()); setBulkStatus(null); }, [segmentId]);
+
+  function toggleSelect(contactId) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(contactId)) next.delete(contactId); else next.add(contactId);
+      return next;
+    });
+  }
+
+  async function handleBulkAdd() {
+    const actor = await ensureName();
+    if (!actor) return;
+    setBulkLoading(true);
+    setBulkStatus(null);
+    const toAdd = (data?.leads || []).filter((l) => selectedIds.has(l.contact_id));
+    let added = 0, skipped = 0;
+    for (const lead of toAdd) {
+      try {
+        await createLead(abmLeadToPipelinePrefill(lead), actor);
+        added++;
+      } catch {
+        skipped++;
+      }
+    }
+    setBulkLoading(false);
+    setSelectedIds(new Set());
+    refreshPipelineCheck();
+    setBulkStatus(`Added ${added} lead${added === 1 ? "" : "s"} to the pipeline.${skipped ? ` ${skipped} skipped (already in pipeline).` : ""}`);
+  }
 
   if (segmentsLoading) return <div className="loading">Loading live data from HubSpot…</div>;
   if (segmentsError) return <div className="error">Couldn't load live data: {segmentsError}</div>;
@@ -119,9 +163,26 @@ export function AbmPage() {
             <section>
               <h2>All {data.leads.length} Leads</h2>
               <p className="subtitle" style={{ marginBottom: 10 }}>
-                Filter by the "All companies" dropdown below to view a single account.
+                Filter by the dropdowns below to narrow by company or outreach status. The
+                "Outreach" column is E=Email, L=LinkedIn, C=Calling, M=Meeting — hover a badge for its exact status.
+                Check the Pipeline column to select leads, then add them in bulk.
               </p>
-              <LeadTable leads={data.leads} />
+              {selectedIds.size > 0 && (
+                <div className="bulk-action-bar">
+                  <span>{selectedIds.size} selected</span>
+                  <button type="button" className="btn btn-primary" onClick={handleBulkAdd} disabled={bulkLoading}>
+                    {bulkLoading ? "Adding…" : `Add ${selectedIds.size} to Pipeline`}
+                  </button>
+                  <button type="button" className="btn" onClick={() => setSelectedIds(new Set())}>Clear</button>
+                </div>
+              )}
+              {bulkStatus && <p className="subtitle" style={{ marginBottom: 10 }}>{bulkStatus}</p>}
+              <LeadTable
+                leads={data.leads}
+                pipelineStatus={inPipeline}
+                selectedIds={selectedIds}
+                onToggleSelect={toggleSelect}
+              />
             </section>
           </>
         )}
