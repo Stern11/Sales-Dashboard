@@ -7,7 +7,10 @@ import { useMemo, useState } from "react";
  * rows: array of row objects
  * rowKey(row): string — unique key per row
  * searchPlaceholder, searchKeys: string[] — text search across these row fields (skipped if omitted)
- * filters?: [{ key, label, options: string[], getValue(row) }] — each renders a <select>
+ * filters?: [{ key, label, options: (string | {value, label})[], getValue(row) }] —
+ *   each renders a <select>. Plain strings are used as both the filter value
+ *   and the displayed label; pass {value, label} when the underlying value
+ *   (e.g. a raw HubSpot enum like "opportunity") isn't human-readable on its own.
  * defaultSort?: { key, dir: 1 | -1 }
  */
 export function DataTable({ columns, rows, rowKey, searchPlaceholder, searchKeys, filters, defaultSort }) {
@@ -63,9 +66,11 @@ export function DataTable({ columns, rows, rowKey, searchPlaceholder, searchKeys
               onChange={(e) => setFilterValues((v) => ({ ...v, [f.key]: e.target.value }))}
             >
               <option value="">{f.label}</option>
-              {f.options.map((opt) => (
-                <option key={opt} value={opt}>{opt}</option>
-              ))}
+              {f.options.map((opt) => {
+                const value = typeof opt === "object" ? opt.value : opt;
+                const label = typeof opt === "object" ? opt.label : opt;
+                return <option key={value} value={value}>{label}</option>;
+              })}
             </select>
           ))}
         </div>

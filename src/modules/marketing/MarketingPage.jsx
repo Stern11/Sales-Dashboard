@@ -40,10 +40,16 @@ export function MarketingPage() {
     }));
   }, [data, adLeads]);
 
-  const demoStageIdx = data?.stages.findIndex((s) => s.value === "opportunity");
-  const stageIndexOf = (value) => data?.stages.findIndex((s) => s.value === value) ?? -1;
-  const advancedToDemo = demoStageIdx >= 0 ? adLeads.filter((l) => stageIndexOf(l.lifecycle_stage) >= demoStageIdx).length : null;
-  const meetingsBooked = adLeads.reduce((sum, l) => sum + l.num_meetings, 0);
+  // Cumulative — reached this stage or any stage beyond it — not just
+  // currently sitting there. A lead that did a demo call and has since moved
+  // on to SQL still counts toward "Demo Calls"; lifecyclestage only holds
+  // the *current* stage, so counting exact matches undercounts total
+  // activity by however many leads have since progressed further.
+  const stageIdx = (value) => data?.stages.findIndex((s) => s.value === value) ?? -1;
+  const demoCallIdx = stageIdx("opportunity");
+  const sqlIdx = stageIdx("salesqualifiedlead");
+  const demoCallCount = demoCallIdx >= 0 ? adLeads.filter((l) => stageIdx(l.lifecycle_stage) >= demoCallIdx).length : 0;
+  const sqlCount = sqlIdx >= 0 ? adLeads.filter((l) => stageIdx(l.lifecycle_stage) >= sqlIdx).length : 0;
 
   return (
     <div>
@@ -65,14 +71,14 @@ export function MarketingPage() {
                   sub: spend.error ? "Not available yet" : undefined,
                 },
                 { label: "LinkedIn Ad Leads", value: adLeads.length },
-                { label: "Meetings Booked", value: meetingsBooked },
-                { label: "→ Demo Call+", value: advancedToDemo ?? "—" },
+                { label: "Demo Calls", value: demoCallCount, sub: "reached this stage or beyond" },
+                { label: "SQL", value: sqlCount, sub: "reached this stage or beyond" },
               ]}
             />
             {spend.error && (
               <p className="subtitle" style={{ marginBottom: 16 }}>
-                Ad Spend / Live Campaigns: {spend.error} — LinkedIn Ad Leads, meetings, and the funnel below don't
-                depend on this and are live.
+                Ad Spend / Live Campaigns: {spend.error} — LinkedIn Ad Leads, Demo Calls, SQL, and the funnel below
+                don't depend on this and are live.
               </p>
             )}
             <section>
