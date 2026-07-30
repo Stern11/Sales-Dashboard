@@ -6,7 +6,7 @@ import { useNameTagContext } from "../../context/NameTagContext.jsx";
 
 const EMPTY = {
   company_name: "", contact_name: "", email: "", phone: "", source: "",
-  company_scale: "", is_supply_chain: false, priority: "medium", deal_size: "", project_description: "",
+  company_scale: "", region: null, is_supply_chain: false, priority: "medium", deal_size: "", project_description: "",
 };
 
 /**

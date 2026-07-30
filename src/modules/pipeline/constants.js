@@ -48,6 +48,11 @@ export const SOURCE_CATEGORIES = ["ABM", "Event", "Ads", "Partner", "Referral"];
 export const SOURCE_OTHER = "Other";
 export const SOURCE_PRESETS = [...SOURCE_CATEGORIES, SOURCE_OTHER];
 
+// Same dropdown-plus-Other pattern as source. Optional — a lead can have no
+// region set yet.
+export const REGION_CATEGORIES = ["US", "UK", "APAC", "India"];
+export const REGION_OTHER = "Other";
+
 export const currency = new Intl.NumberFormat(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 
 export function relativeTime(isoString) {

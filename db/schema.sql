@@ -19,6 +19,7 @@ create table pipeline_leads (
   hubspot_contact_id    text,
   hubspot_origin_module text,
   company_scale         text,
+  region                text,
   is_supply_chain       boolean not null default false,
   priority              text not null default 'medium'
                           check (priority in ('low','medium','high')),
@@ -71,3 +72,9 @@ create index pipeline_lead_stage_history_to_stage_idx on pipeline_lead_stage_his
 -- database needs this run once by hand:
 --   alter table pipeline_leads add column priority text not null default 'medium'
 --     check (priority in ('low','medium','high'));
+
+-- Migration (2026-07-31): added `region`. Nullable, free text (same reasoning
+-- as `source` — a fixed dropdown in the UI with an "Other" free-text escape
+-- hatch, not DB-enforced, so adding a region is a one-file UI change). Run
+-- against an already-created database:
+--   alter table pipeline_leads add column region text;

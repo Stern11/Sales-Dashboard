@@ -1,4 +1,4 @@
-import { COMPANY_SCALE_OPTIONS, SOURCE_CATEGORIES, SOURCE_OTHER, PRIORITY_OPTIONS } from "./constants.js";
+import { COMPANY_SCALE_OPTIONS, SOURCE_CATEGORIES, SOURCE_OTHER, PRIORITY_OPTIONS, REGION_CATEGORIES, REGION_OTHER } from "./constants.js";
 
 /**
  * Shared field set used by both AddLeadModal (create) and LeadDetailDrawer
@@ -14,6 +14,11 @@ export function LeadFieldsForm({ values, onChange, sourceLocked, disabled }) {
   // current value isn't one of them (covers both "user picked Other and is
   // typing" and a blank/never-chosen value).
   const sourceCategory = SOURCE_CATEGORIES.includes(values.source) ? values.source : SOURCE_OTHER;
+
+  // Region is optional (unlike source) — "" means unset, shown as "—".
+  const regionCategory = !values.region
+    ? ""
+    : REGION_CATEGORIES.includes(values.region) ? values.region : REGION_OTHER;
 
   return (
     <>
@@ -56,10 +61,15 @@ export function LeadFieldsForm({ values, onChange, sourceLocked, disabled }) {
           )}
         </label>
         <label>
-          Scale of company
-          <select value={values.company_scale || ""} onChange={set("company_scale")} disabled={disabled}>
+          Region
+          <select
+            value={regionCategory}
+            onChange={(e) => onChange({ region: e.target.value === REGION_OTHER ? "" : (e.target.value || null) })}
+            disabled={disabled}
+          >
             <option value="">—</option>
-            {COMPANY_SCALE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            {REGION_CATEGORIES.map((r) => <option key={r} value={r}>{r}</option>)}
+            <option value={REGION_OTHER}>{REGION_OTHER}</option>
           </select>
         </label>
       </div>
@@ -76,10 +86,25 @@ export function LeadFieldsForm({ values, onChange, sourceLocked, disabled }) {
           />
         </label>
       )}
+      {regionCategory === REGION_OTHER && (
+        <label>
+          Specify region
+          <input
+            type="text"
+            value={values.region || ""}
+            onChange={set("region")}
+            disabled={disabled}
+            placeholder="e.g. LATAM, EU…"
+          />
+        </label>
+      )}
       <div className="form-row">
         <label>
-          Deal size ($)
-          <input type="number" min="0" step="1" value={values.deal_size ?? ""} onChange={set("deal_size")} disabled={disabled} />
+          Scale of company
+          <select value={values.company_scale || ""} onChange={set("company_scale")} disabled={disabled}>
+            <option value="">—</option>
+            {COMPANY_SCALE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
         </label>
         <label>
           Priority
@@ -88,10 +113,16 @@ export function LeadFieldsForm({ values, onChange, sourceLocked, disabled }) {
           </select>
         </label>
       </div>
-      <label className="checkbox-row">
-        <input type="checkbox" checked={!!values.is_supply_chain} onChange={set("is_supply_chain")} disabled={disabled} />
-        Supply chain company
-      </label>
+      <div className="form-row">
+        <label>
+          Deal size ($)
+          <input type="number" min="0" step="1" value={values.deal_size ?? ""} onChange={set("deal_size")} disabled={disabled} />
+        </label>
+        <label className="checkbox-row">
+          <input type="checkbox" checked={!!values.is_supply_chain} onChange={set("is_supply_chain")} disabled={disabled} />
+          Supply chain company
+        </label>
+      </div>
       <label>
         Project description
         <textarea value={values.project_description || ""} onChange={set("project_description")} disabled={disabled} />

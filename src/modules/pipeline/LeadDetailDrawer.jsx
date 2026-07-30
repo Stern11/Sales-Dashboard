@@ -42,6 +42,7 @@ export function LeadDetailDrawer({ leadId, onClose, onChanged }) {
         phone: values.phone,
         source: values.source,
         company_scale: values.company_scale || null,
+        region: values.region || null,
         is_supply_chain: values.is_supply_chain,
         priority: values.priority,
         deal_size: values.deal_size === "" ? null : Number(values.deal_size),
