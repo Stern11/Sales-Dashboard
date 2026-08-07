@@ -105,22 +105,26 @@ export function PipelinePage() {
               />
             </section>
             <div className="pipeline-toolbar">
-              <PeriodToggle options={VIEW_OPTIONS} value={view} onChange={setView} />
-              <button type="button" className="btn btn-primary" onClick={() => setAddModalOpen(true)}>+ Add Lead</button>
-              {view === "board" && (
-                <button type="button" className="btn" onClick={() => setShowSideStates((v) => !v)}>
-                  {showSideStates ? "Hide" : "Show"} Cold & Lost ({sideStateCount})
-                </button>
-              )}
-              <select value={regionFilter} onChange={(e) => setRegionFilter(e.target.value)}>
-                <option value="">All regions</option>
-                {regionOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-              {filtersActive && (
-                <button type="button" className="btn btn-reset-filters" onClick={resetFilters}>
-                  ✕ Reset filters
-                </button>
-              )}
+              <div className="pipeline-toolbar-group">
+                <PeriodToggle options={VIEW_OPTIONS} value={view} onChange={setView} />
+              </div>
+              <div className="pipeline-toolbar-group">
+                {view === "board" && (
+                  <button type="button" className="btn" onClick={() => setShowSideStates((v) => !v)}>
+                    {showSideStates ? "Hide" : "Show"} Cold & Lost ({sideStateCount})
+                  </button>
+                )}
+                <select value={regionFilter} onChange={(e) => setRegionFilter(e.target.value)}>
+                  <option value="">All regions</option>
+                  {regionOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+                {filtersActive && (
+                  <button type="button" className="btn btn-reset-filters" onClick={resetFilters}>
+                    ✕ Reset filters
+                  </button>
+                )}
+                <button type="button" className="btn btn-primary" onClick={() => setAddModalOpen(true)}>+ Add Lead</button>
+              </div>
             </div>
             <section>
               {view === "board" ? (
