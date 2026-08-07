@@ -29,6 +29,14 @@ export function LeadDetailDrawer({ leadId, onClose, onChanged }) {
     setValues((v) => ({ ...v, ...update }));
   }
 
+  // Compares against the last-loaded/last-saved snapshot (data.lead, which
+  // useEffect above resets `values` to) rather than tracking individual
+  // field touches — simpler, and correct as long as nothing transforms a
+  // field's shape between load and re-serialization (it doesn't: every
+  // LeadFieldsForm/patch() write round-trips the same string/boolean/number
+  // types the API returned).
+  const isDirty = !!(values && data?.lead && JSON.stringify(values) !== JSON.stringify(data.lead));
+
   async function handleSave(e) {
     e.preventDefault();
     setSaveError(null);
@@ -74,7 +82,7 @@ export function LeadDetailDrawer({ leadId, onClose, onChanged }) {
         {values && (
           <>
             <div className="lead-detail-current-stage">
-              <StatusPill variant={stageMeta(values.stage).pillVariant}>{stageMeta(values.stage).label}</StatusPill>
+              <StatusPill color={stageMeta(values.stage).color}>{stageMeta(values.stage).label}</StatusPill>
               {stageMeta(values.stage).isActive && (
                 <select value={values.stage} onChange={(e) => handleQuickMove(e.target.value)} disabled={saving}>
                   {ACTIVE_STAGES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
@@ -89,17 +97,40 @@ export function LeadDetailDrawer({ leadId, onClose, onChanged }) {
             <div className="lead-detail-section">
               <h4>Lead details</h4>
               <form className="form-grid" onSubmit={handleSave}>
-                <LeadFieldsForm values={values} onChange={patch} sourceLocked={values.source_locked} />
+                <LeadFieldsForm values={values} onChange={patch} sourceLocked={values.source_locked} hideProjectDescription hideDealSize />
                 {saveError && <p className="form-error">{saveError}</p>}
-                <div className="form-actions">
-                  <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? "Saving…" : "Save changes"}</button>
+                <div className="form-row-actions">
+                  <label className="field-narrow">
+                    Deal size ($)
+                    <input
+                      type="number" min="0" step="1"
+                      value={values.deal_size ?? ""}
+                      onChange={(e) => patch({ deal_size: e.target.value })}
+                      disabled={saving}
+                    />
+                  </label>
+                  <button type="submit" className="btn btn-primary" disabled={saving || !isDirty}>{saving ? "Saving…" : "Save changes"}</button>
                 </div>
               </form>
             </div>
 
-            <div className="lead-detail-section">
+            <div className="lead-detail-section lead-detail-section-featured">
               <h4>Next steps</h4>
               <NotesTimeline leadId={leadId} notes={data.notes || []} onNoteAdded={refresh} />
+            </div>
+
+            <div className="lead-detail-section">
+              <h4>Project description</h4>
+              <div className="form-grid">
+                <label>
+                  <textarea
+                    value={values.project_description || ""}
+                    onChange={(e) => patch({ project_description: e.target.value })}
+                    placeholder="What is this project about?"
+                  />
+                </label>
+              </div>
+              <p className="subtitle" style={{ marginTop: 6 }}>Saved together with the Lead details form above.</p>
             </div>
 
             {data.stage_history?.length > 0 && (

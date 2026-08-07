@@ -44,6 +44,8 @@ not `npm run dev` (which only starts Vite, with no working `/api/*` routes).
 |---|---|---|
 | `HUBSPOT_TOKEN` | ABM, Marketing, and "Add to pipeline" origin lookups | HubSpot → Settings → Integrations → Private Apps → your app → Auth → Access token |
 | `DATABASE_URL` | Sales Pipeline (the only module with a database) | Vercel → Project → Storage → Marketplace → Neon → create a database; the connection string is added to your project's env vars automatically |
+| `RESEND_API_KEY` | "You were tagged" emails when someone is @-mentioned in a pipeline note | resend.com → sign up → API Keys → create one (Sending access is enough) |
+| `EMAIL_FROM` | Optional — the "from" address for tag notifications | A verified sender on a domain you've added under resend.com → Domains (e.g. `Sales Pipeline <pipeline@heizen.work>`). Until a domain is verified, falls back to Resend's sandbox sender, which only delivers to the Resend account's own email. |
 
 Set variables in Vercel → Project → Settings → Environment Variables (scoped
 to whichever of Production/Preview/Development you need), then for local dev
@@ -53,11 +55,16 @@ run `vercel env pull .env.local` to sync them down.
 
 1. In the Vercel dashboard: Project → Storage → Marketplace → **Neon** → create
    a database and connect it to this project (this sets `DATABASE_URL`).
-2. Run `db/schema.sql` against it once — either paste it into the Neon SQL
-   editor, or `psql "$DATABASE_URL" -f db/schema.sql` locally after
-   `vercel env pull .env.local`.
-3. No migration framework is used — schema changes are applied by hand and
-   `db/schema.sql` is kept as the source of truth.
+2. `vercel env pull .env.local`, then `npm run migrate` — applies every file
+   in `db/migrations/` in order. Safe to re-run any time; already-applied
+   migrations are tracked in a `schema_migrations` table and skipped.
+3. Adding a schema change later: add a new numbered file to
+   `db/migrations/` (never edit an already-applied one), run `npm run
+   migrate` locally against dev, then run it again against production with
+   `DATABASE_URL=<prod-connection-string> npm run migrate` (a shell-exported
+   `DATABASE_URL` always wins over `.env.local`'s). See
+   `db/schema.sql` for a human-readable snapshot of the full current schema
+   (not run directly — `db/migrations/` is the source of truth).
 
 ### Dev vs. production data — use a separate Neon branch
 
@@ -76,8 +83,9 @@ database production users see. Recommended setup, using Neon's branching
 3. `vercel env pull .env.local` (used for local `vercel dev`) pulls the
    Development value by default — so local work and PR previews always hit
    the dev branch, never production.
-4. Apply schema changes (`db/schema.sql`) to the dev branch first, verify,
-   then apply the same change to the production branch before/at deploy time.
+4. Apply schema changes (`npm run migrate`) to the dev branch first, verify,
+   then run the same command with `DATABASE_URL=<prod>` before/at deploy
+   time — see "Setting up the Sales Pipeline database" above.
 
 Without this split, there's only one database — fine to get started, but
 clean up any test leads (`select company_name from pipeline_leads;`) before

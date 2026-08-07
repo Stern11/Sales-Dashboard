@@ -11,14 +11,12 @@ import { useNameTagContext } from "../../context/NameTagContext.jsx";
  * active stages get the horizontal room instead of competing for it with two
  * columns most people aren't looking at most of the time.
  */
-export function KanbanBoard({ leads, onSelect, onChanged, onOptimisticMove }) {
-  const [showSideStates, setShowSideStates] = useState(false);
+export function KanbanBoard({ leads, showSideStates, onSelect, onChanged, onOptimisticMove }) {
   const [coldLostDrop, setColdLostDrop] = useState(null); // { lead, targetStage } — pending reason capture
   const { changeStage } = usePipelineMutations();
   const { ensureName } = useNameTagContext();
   const activeStages = BOARD_STAGES.filter((s) => s.isActive);
   const sideStates = BOARD_STAGES.filter((s) => !s.isActive);
-  const sideStateCount = sideStates.reduce((sum, s) => sum + leads.filter((l) => l.stage === s.value).length, 0);
 
   // Dropping onto Cold/Lost opens a small modal to optionally capture why
   // (useful info, worth the one extra step). Every other drop — including
@@ -43,11 +41,6 @@ export function KanbanBoard({ leads, onSelect, onChanged, onOptimisticMove }) {
 
   return (
     <div>
-      <div className="kanban-board-toolbar">
-        <button type="button" className="btn" onClick={() => setShowSideStates((v) => !v)}>
-          {showSideStates ? "Hide" : "Show"} Cold & Lost ({sideStateCount})
-        </button>
-      </div>
       <div className="kanban-board">
         {activeStages.map((stage) => (
           <KanbanColumn

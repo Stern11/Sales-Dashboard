@@ -87,6 +87,7 @@ export function LeadCard({ lead, onSelect }) {
       <div className="lead-card-meta">
         {lead.deal_size != null && <span className="lead-card-deal-size">{currency.format(lead.deal_size)}</span>}
         <StatusPill variant={priorityMeta(lead.priority).pillVariant}>{priorityMeta(lead.priority).label}</StatusPill>
+        {lead.region && <StatusPill variant="notstarted">{lead.region}</StatusPill>}
         <StatusPill variant={lead.is_supply_chain ? "supplychain" : "notstarted"}>
           {lead.is_supply_chain ? "Supply Chain" : "Non-Supply Chain"}
         </StatusPill>

@@ -70,15 +70,14 @@ export function AbmPage() {
     setBulkLoading(true);
     setBulkStatus(null);
     const toAdd = (data?.leads || []).filter((l) => selectedIds.has(l.contact_id));
-    let added = 0, skipped = 0;
-    for (const lead of toAdd) {
-      try {
-        await createLead(abmLeadToPipelinePrefill(lead), actor);
-        added++;
-      } catch {
-        skipped++;
-      }
-    }
+    // Independent writes (different contacts) — run concurrently rather than
+    // one-at-a-time; each createLead() is a separate ~1-2s Neon round-trip,
+    // so serializing N of them made bulk-add take N times as long for no
+    // reason. Promise.allSettled so one failure (e.g. a race against another
+    // "already in pipeline" add) doesn't abort the rest of the batch.
+    const results = await Promise.allSettled(toAdd.map((lead) => createLead(abmLeadToPipelinePrefill(lead), actor)));
+    const added = results.filter((r) => r.status === "fulfilled").length;
+    const skipped = results.length - added;
     setBulkLoading(false);
     setSelectedIds(new Set());
     refreshPipelineCheck();

@@ -9,7 +9,11 @@
       "Bash(node -e \"require\\('dotenv'\\).config\\({path:'.env.local'}\\); console.log\\(JSON.stringify\\(process.env.HUBSPOT_TOKEN\\)\\)\")",
       "Bash(node -e ' *)",
       "Bash(ps eww *)",
-      "Bash(echo \"exit:$?\")"
+      "Bash(echo \"exit:$?\")",
+      "Bash(find / -maxdepth 6 -iname \"*chromium-cli*\")",
+      "Bash(find / -maxdepth 6 -iname \"*playwright*\")",
+      "Read(//Users/aryanpratap/.cache/**)",
+      "Bash(npx --version)"
     ]
   }
 }

@@ -11,7 +11,8 @@ export function usePipelineMutations() {
     updateLead: (id, fields, actor) => mutate(`/api/pipeline/${id}`, { method: "PATCH", body: { ...fields, actor } }),
     changeStage: (id, { to_stage, reason, actor }) =>
       mutate(`/api/pipeline/${id}/stage`, { method: "POST", body: { to_stage, reason, actor } }),
-    addNote: (id, { body, author }) => mutate(`/api/pipeline/${id}/notes`, { method: "POST", body: { body, author } }),
+    addNote: (id, { body, author, tagged_emails }) =>
+      mutate(`/api/pipeline/${id}/notes`, { method: "POST", body: { body, author, tagged_emails } }),
     deleteLead: (id, { confirm_company_name, actor }) =>
       mutate(`/api/pipeline/${id}`, { method: "DELETE", body: { confirm_company_name, actor } }),
   };

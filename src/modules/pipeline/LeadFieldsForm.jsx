@@ -5,7 +5,7 @@ import { COMPANY_SCALE_OPTIONS, SOURCE_CATEGORIES, SOURCE_OTHER, PRIORITY_OPTION
  * (edit) — a controlled form over a `values` object, changes reported via
  * `onChange(patch)` so the caller owns the actual state.
  */
-export function LeadFieldsForm({ values, onChange, sourceLocked, disabled }) {
+export function LeadFieldsForm({ values, onChange, sourceLocked, disabled, hideProjectDescription, hideDealSize }) {
   function set(key) {
     return (e) => onChange({ [key]: e.target.type === "checkbox" ? e.target.checked : e.target.value });
   }
@@ -22,6 +22,10 @@ export function LeadFieldsForm({ values, onChange, sourceLocked, disabled }) {
 
   return (
     <>
+      <label className="checkbox-row">
+        <input type="checkbox" checked={!!values.is_supply_chain} onChange={set("is_supply_chain")} disabled={disabled} />
+        Supply chain company
+      </label>
       <div className="form-row">
         <label>
           Company name
@@ -113,20 +117,18 @@ export function LeadFieldsForm({ values, onChange, sourceLocked, disabled }) {
           </select>
         </label>
       </div>
-      <div className="form-row">
-        <label>
+      {!hideDealSize && (
+        <label className="field-narrow">
           Deal size ($)
           <input type="number" min="0" step="1" value={values.deal_size ?? ""} onChange={set("deal_size")} disabled={disabled} />
         </label>
-        <label className="checkbox-row">
-          <input type="checkbox" checked={!!values.is_supply_chain} onChange={set("is_supply_chain")} disabled={disabled} />
-          Supply chain company
+      )}
+      {!hideProjectDescription && (
+        <label>
+          Project description
+          <textarea value={values.project_description || ""} onChange={set("project_description")} disabled={disabled} />
         </label>
-      </div>
-      <label>
-        Project description
-        <textarea value={values.project_description || ""} onChange={set("project_description")} disabled={disabled} />
-      </label>
+      )}
     </>
   );
 }

@@ -37,7 +37,7 @@
 .drawer-body { padding: 18px; overflow-y: auto; flex: 1; }
 
 /* Forms */
-.form-grid { display: flex; flex-direction: column; gap: 14px; }
+.form-grid { display: flex; flex-direction: column; gap: 12px; }
 .form-row { display: flex; gap: 12px; }
 .form-row > label { flex: 1; }
 .form-grid label {
@@ -51,21 +51,37 @@
 }
 .form-grid textarea { resize: vertical; min-height: 70px; }
 .checkbox-row { flex-direction: row !important; align-items: center; gap: 8px !important; }
+.field-narrow { max-width: 220px; }
 .checkbox-row input { width: auto; }
-.form-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.form-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 0; }
+/* Deal size + Save changes share a row (LeadDetailDrawer only) so the button
+   sits at the same height as the last field instead of on its own line
+   below a lot of empty space. align-items:flex-end lines the button's
+   bottom edge up with the input's bottom edge (the label text above the
+   input has no counterpart above the button). */
+.form-row-actions { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; }
+.form-row-actions .btn { margin: 0; }
 .btn-primary { background: var(--seq-450); border-color: var(--seq-450); color: #fff; }
-.btn-primary:hover { filter: brightness(1.08); border-color: var(--seq-450); }
+.btn-primary:hover:not(:disabled) { filter: brightness(1.08); border-color: var(--seq-450); }
+.btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
 .btn-danger { color: var(--status-critical); }
 .btn-danger-solid { background: var(--status-critical); border-color: var(--status-critical); color: #fff; }
 .btn-danger-solid:hover:not(:disabled) { filter: brightness(1.1); border-color: var(--status-critical); }
 .btn-danger-solid:disabled { opacity: 0.5; cursor: not-allowed; }
 .form-error { color: var(--status-critical); font-size: 12px; margin: -4px 0 0; }
 
-/* Pipeline page toolbar */
-.pipeline-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+/* Pipeline page toolbar — everything (view toggle, actions, filters) in one
+   left-aligned line, wrapping only if the viewport is too narrow to fit it. */
+.pipeline-toolbar { display: flex; align-items: center; justify-content: flex-start; gap: 8px; margin-bottom: 18px; flex-wrap: wrap; }
+.pipeline-toolbar .tab-group { margin-bottom: 0; }
+.pipeline-toolbar .btn { margin: 0; }
+.btn-reset-filters {
+  color: var(--text-secondary); background: transparent; border-color: transparent;
+  font-weight: 600;
+}
+.btn-reset-filters:hover { color: var(--status-critical); border-color: transparent; background: var(--page-plane); }
 
 /* Kanban board */
-.kanban-board-toolbar { display: flex; justify-content: flex-end; margin-bottom: 10px; }
 /* Fixed-width columns (flex: 0 0 <width>, not 1 0 — no grow) so a handful of
    columns don't stretch to fill the available width and end up mostly
    empty. Stays inside the page's normal max-width; if 5+ columns don't fit
@@ -124,19 +140,54 @@
 .stage-menu-list hr { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
 
 /* Lead detail drawer */
-.lead-detail-section { margin-bottom: 20px; }
+.lead-detail-section { margin-bottom: 16px; }
 .lead-detail-section h4 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-muted); margin: 0 0 10px; }
+
+/* Next steps is the primary action in this drawer (assigning/tracking work),
+   so it gets the same blue-tinted-card treatment as .bulk-action-bar
+   elsewhere, instead of blending in as just another plain section. */
+.lead-detail-section-featured {
+  background: var(--pill-stage-bg); border: 1px solid var(--seq-450);
+  border-radius: 10px; padding: 12px 14px;
+}
+/* Notes can pile up over time — scroll internally past a few entries
+   instead of growing the card (and pushing the rest of the drawer down)
+   without bound. */
+.lead-detail-section-featured .notes-timeline { overflow-y: auto; max-height: 200px; padding-right: 2px; }
+.lead-detail-section-featured h4 { color: var(--seq-450); font-size: 12px; }
 .lead-detail-danger-zone { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); }
 .lead-detail-danger-zone .btn { margin-left: 0; }
 .lead-detail-current-stage { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
 
-/* Notes timeline */
-.notes-timeline { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+/* Notes timeline — input form first (see NotesTimeline.jsx), thread below */
+.add-note-form { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+/* Browser-default placeholder color is too faint (especially against the
+   Next steps card's blue tint) — darken it without making it read as real
+   (already-typed) text. */
+.add-note-form textarea::placeholder { color: var(--text-muted); opacity: 1; }
+.notes-timeline { display: flex; flex-direction: column; gap: 10px; }
 .note-item { border: 1px solid var(--border); border-radius: 8px; padding: 9px 11px; background: var(--page-plane); }
 .note-item-meta { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--text-muted); margin-bottom: 4px; }
 .note-item-body { font-size: 12.5px; color: var(--text-primary); white-space: pre-wrap; }
+.mention-tag { color: var(--seq-450); font-weight: 700; }
+.note-item-tags { font-size: 11px; color: var(--text-muted); margin-top: 6px; }
 .notes-empty { font-size: 12px; color: var(--text-muted); }
-.add-note-form { display: flex; flex-direction: column; gap: 8px; }
+
+/* @-mention autocomplete (MentionTextarea.jsx) — portal into document.body,
+   positioned from the textarea's own bounding rect, same technique as
+   .stage-menu-list above. */
+.mention-dropdown {
+  position: fixed; z-index: 200; max-width: 280px;
+  background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.18); padding: 4px; display: flex; flex-direction: column;
+  max-height: 220px; overflow-y: auto;
+}
+.mention-dropdown button {
+  border: none; background: transparent; color: var(--text-primary); text-align: left;
+  padding: 7px 9px; font-size: 12.5px; border-radius: 5px; cursor: pointer; white-space: nowrap;
+}
+.mention-dropdown button.active, .mention-dropdown button:hover { background: var(--page-plane); }
+.mention-dropdown-empty { padding: 7px 9px; font-size: 12px; color: var(--text-muted); white-space: normal; }
 
 
 @media (max-width: 900px) {

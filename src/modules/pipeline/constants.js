@@ -19,6 +19,19 @@ export function stageMeta(value) {
   return STAGES.find((s) => s.value === value) || { value, label: value, pillVariant: "stage" };
 }
 
+// Mirrors summarize() in lib/pipeline/queries.js — recomputed client-side so
+// the KPI row and funnel chart can reflect whatever filter is currently
+// applied instead of always showing the server's whole-table totals.
+export function summarizeLeads(leads) {
+  const by_stage = Object.fromEntries(STAGES.map((s) => [s.value, 0]));
+  let open_pipeline_value = 0;
+  for (const lead of leads) {
+    by_stage[lead.stage] = (by_stage[lead.stage] || 0) + 1;
+    if (ACTIVE_STAGES.some((s) => s.value === lead.stage)) open_pipeline_value += Number(lead.deal_size) || 0;
+  }
+  return { total: leads.length, by_stage, open_pipeline_value };
+}
+
 export const COMPANY_SCALE_OPTIONS = [
   { value: "startup", label: "Startup (<50 employees)" },
   { value: "smb", label: "SMB (50–200)" },
@@ -52,6 +65,16 @@ export const SOURCE_PRESETS = [...SOURCE_CATEGORIES, SOURCE_OTHER];
 // region set yet.
 export const REGION_CATEGORIES = ["US", "UK", "APAC", "India"];
 export const REGION_OTHER = "Other";
+export const REGION_UNSPECIFIED = "Unspecified";
+
+// Buckets a lead's free-text region into one of the fixed categories, or
+// REGION_OTHER for any custom text, or REGION_UNSPECIFIED when unset — keeps
+// the region pill filter to a handful of options regardless of how many
+// distinct "Other" strings exist across leads.
+export function regionBucket(region) {
+  if (!region) return REGION_UNSPECIFIED;
+  return REGION_CATEGORIES.includes(region) ? region : REGION_OTHER;
+}
 
 export const currency = new Intl.NumberFormat(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 
