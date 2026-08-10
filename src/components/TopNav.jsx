@@ -2,9 +2,10 @@ import { NavLink } from "react-router-dom";
 import { useTheme } from "../hooks/useTheme.js";
 
 const MODULES = [
-  { to: "/abm", label: "ABM Outreach" },
   { to: "/pipeline", label: "Sales Pipeline" },
+  { to: "/demo-calls", label: "Demo Calls" },
   { to: "/marketing", label: "Performance Marketing" },
+  { to: "/abm", label: "ABM Outreach" },
 ];
 
 export function TopNav() {

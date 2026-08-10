@@ -7,9 +7,11 @@ import { NotesTimeline } from "./NotesTimeline.jsx";
 import { StageMenu } from "./LeadCard.jsx";
 import { StageChangeModal } from "./StageChangeModal.jsx";
 import { DeleteLeadModal } from "./DeleteLeadModal.jsx";
+import { DemoCallHistoryModal } from "./DemoCallHistoryModal.jsx";
 import { usePipelineLead } from "./usePipelineData.js";
 import { usePipelineMutations } from "./usePipelineMutations.js";
 import { useNameTagContext } from "../../context/NameTagContext.jsx";
+import { useApiData } from "../../hooks/useApiData.js";
 import { stageMeta, relativeTime, ACTIVE_STAGES } from "./constants.js";
 
 export function LeadDetailDrawer({ leadId, onClose, onChanged }) {
@@ -18,8 +20,14 @@ export function LeadDetailDrawer({ leadId, onClose, onChanged }) {
   const [saveError, setSaveError] = useState(null);
   const [modalTarget, setModalTarget] = useState(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [historyModalOpen, setHistoryModalOpen] = useState(false);
   const { updateLead, changeStage, loading: saving } = usePipelineMutations();
   const { ensureName } = useNameTagContext();
+
+  // Most pipeline leads have no Demo Calls origin — this is a cheap, silent
+  // 200-with-null-lead miss in that case, not an error (see api/demo-calls/
+  // by-pipeline-lead/[pipelineLeadId].js). The button only appears on a hit.
+  const { data: demoHistory } = useApiData(leadId ? `/api/demo-calls/by-pipeline-lead/${leadId}` : null);
 
   useEffect(() => {
     if (data?.lead) setValues(data.lead);
@@ -84,14 +92,29 @@ export function LeadDetailDrawer({ leadId, onClose, onChanged }) {
             <div className="lead-detail-current-stage">
               <StatusPill color={stageMeta(values.stage).color}>{stageMeta(values.stage).label}</StatusPill>
               {stageMeta(values.stage).isActive && (
-                <select value={values.stage} onChange={(e) => handleQuickMove(e.target.value)} disabled={saving}>
-                  {ACTIVE_STAGES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                <select
+                  value={values.stage}
+                  onChange={(e) => handleQuickMove(e.target.value)}
+                  disabled={saving}
+                  style={{ background: stageMeta(values.stage).color, color: "#fff", borderColor: stageMeta(values.stage).color }}
+                >
+                  {ACTIVE_STAGES.map((s) => <option key={s.value} value={s.value} style={{ background: s.color, color: "#fff" }}>{s.label}</option>)}
                 </select>
               )}
               <StageMenu lead={values} onOpenModal={setModalTarget} />
             </div>
             {values.cold_lost_reason && (
               <p className="subtitle" style={{ marginBottom: 14 }}>Reason: {values.cold_lost_reason}</p>
+            )}
+            {demoHistory?.lead && (
+              <button
+                type="button"
+                className="btn"
+                style={{ marginBottom: 14 }}
+                onClick={() => setHistoryModalOpen(true)}
+              >
+                View Demo Call History ({demoHistory.calls.length} call{demoHistory.calls.length === 1 ? "" : "s"})
+              </button>
             )}
 
             <div className="lead-detail-section">
@@ -176,6 +199,9 @@ export function LeadDetailDrawer({ leadId, onClose, onChanged }) {
           onClose={() => setDeleteModalOpen(false)}
           onDeleted={() => { setDeleteModalOpen(false); onChanged?.(); onClose(); }}
         />
+      )}
+      {historyModalOpen && demoHistory?.lead && (
+        <DemoCallHistoryModal lead={demoHistory.lead} calls={demoHistory.calls} onClose={() => setHistoryModalOpen(false)} />
       )}
     </Drawer>
   );

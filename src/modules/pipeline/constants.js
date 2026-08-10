@@ -57,7 +57,7 @@ export function priorityMeta(value) {
 // SOURCE_OTHER is picked) any free text the user types describing where it
 // actually came from. See LeadFieldsForm.jsx for the dropdown + "Other" text
 // box this drives.
-export const SOURCE_CATEGORIES = ["ABM", "Event", "Ads", "Partner", "Referral"];
+export const SOURCE_CATEGORIES = ["ABM", "Event", "Ads", "Partner", "Referral", "Demo Call"];
 export const SOURCE_OTHER = "Other";
 export const SOURCE_PRESETS = [...SOURCE_CATEGORIES, SOURCE_OTHER];
 

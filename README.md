@@ -17,6 +17,13 @@ A live, HubSpot-backed dashboard with three modules:
   Ad spend and live-campaign count are wired up but scope-blocked on the
   current HubSpot plan — see
   [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#performance-marketing--two-independently-gated-data-sources).
+- **Demo Calls** — a database-backed tracker for what happens after a lead
+  reaches HubSpot's "Demo Call" stage: first/second/third+ call log entries
+  (date, outcome incl. no-show, notes, next steps, transcript link), an
+  irrelevant/reactivate side state, and an "Add to pipeline" handoff.
+  Contacts who've reached that stage in ABM or Performance Marketing show up
+  automatically as "not yet logged"; leads can also be added by hand. See
+  [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#demo-calls-data-model).
 
 No login — anyone with the URL can view it, and (as of the Sales Pipeline
 module) edit pipeline leads. Edits are attributed by a lightweight name tag
@@ -43,7 +50,7 @@ not `npm run dev` (which only starts Vite, with no working `/api/*` routes).
 | Variable | Required for | How to get it |
 |---|---|---|
 | `HUBSPOT_TOKEN` | ABM, Marketing, and "Add to pipeline" origin lookups | HubSpot → Settings → Integrations → Private Apps → your app → Auth → Access token |
-| `DATABASE_URL` | Sales Pipeline (the only module with a database) | Vercel → Project → Storage → Marketplace → Neon → create a database; the connection string is added to your project's env vars automatically |
+| `DATABASE_URL` | Sales Pipeline and Demo Calls (the two database-backed modules) | Vercel → Project → Storage → Marketplace → Neon → create a database; the connection string is added to your project's env vars automatically |
 | `RESEND_API_KEY` | "You were tagged" emails when someone is @-mentioned in a pipeline note | resend.com → sign up → API Keys → create one (Sending access is enough) |
 | `EMAIL_FROM` | Optional — the "from" address for tag notifications | A verified sender on a domain you've added under resend.com → Domains (e.g. `Sales Pipeline <pipeline@heizen.work>`). Until a domain is verified, falls back to Resend's sandbox sender, which only delivers to the Resend account's own email. |
 
@@ -51,7 +58,7 @@ Set variables in Vercel → Project → Settings → Environment Variables (scop
 to whichever of Production/Preview/Development you need), then for local dev
 run `vercel env pull .env.local` to sync them down.
 
-### Setting up the Sales Pipeline database
+### Setting up the database (Sales Pipeline + Demo Calls)
 
 1. In the Vercel dashboard: Project → Storage → Marketplace → **Neon** → create
    a database and connect it to this project (this sets `DATABASE_URL`).
@@ -85,7 +92,7 @@ database production users see. Recommended setup, using Neon's branching
    the dev branch, never production.
 4. Apply schema changes (`npm run migrate`) to the dev branch first, verify,
    then run the same command with `DATABASE_URL=<prod>` before/at deploy
-   time — see "Setting up the Sales Pipeline database" above.
+   time — see "Setting up the database (Sales Pipeline + Demo Calls)" above.
 
 Without this split, there's only one database — fine to get started, but
 clean up any test leads (`select company_name from pipeline_leads;`) before

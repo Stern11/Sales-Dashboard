@@ -100,3 +100,27 @@ export function marketingLeadToPipelinePrefill(lead) {
     hubspot_origin_module: "marketing",
   };
 }
+
+/**
+ * "Add to pipeline" from a Demo Calls lead (src/modules/demo-calls/
+ * DemoCallLeadDrawer.jsx) — unlike the ABM/Marketing bridges above, this
+ * lead already has real company_name/contact_name/email/phone (typed or
+ * copied in when it was logged), so nothing needs guessing.
+ * hubspot_contact_id/hubspot_origin_module only carry through when the Demo
+ * Calls lead came from a live HubSpot detection — a manually-entered one has
+ * neither, and that's fine, source_locked still applies.
+ */
+export function demoCallLeadToPipelinePrefill(lead) {
+  return {
+    company_name: lead.company_name,
+    contact_name: lead.contact_name,
+    email: lead.email || "",
+    phone: lead.phone || "",
+    source: "Demo Call",
+    source_locked: true,
+    is_supply_chain: true,
+    company_scale: lead.company_scale || null,
+    hubspot_contact_id: lead.hubspot_contact_id ? String(lead.hubspot_contact_id) : undefined,
+    hubspot_origin_module: lead.hubspot_origin_module || "demo-calls",
+  };
+}

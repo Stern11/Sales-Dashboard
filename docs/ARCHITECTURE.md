@@ -47,12 +47,18 @@ api/
   pipeline/[id]/stage.js   → POST /api/pipeline/:id/stage (stage change, incl. cold/lost/revive)
   pipeline/[id]/notes.js   → POST /api/pipeline/:id/notes (append a note)
   pipeline/check.js        → GET /api/pipeline/check?contact_ids=... (bulk "already in pipeline" lookup)
+  demo-calls/index.js               → GET/POST /api/demo-calls (list+summary / create) — database-backed, not HubSpot
+  demo-calls/[id]/index.js          → GET/PATCH/DELETE /api/demo-calls/:id (detail+calls / edit fields / delete)
+  demo-calls/[id]/calls.js          → POST /api/demo-calls/:id/calls (append a call log entry)
+  demo-calls/[id]/calls/[callId].js → PATCH /api/demo-calls/:id/calls/:callId (edit a call log entry)
+  demo-calls/[id]/status.js         → POST /api/demo-calls/:id/status (active/irrelevant)
+  demo-calls/[id]/link-pipeline.js  → POST /api/demo-calls/:id/link-pipeline (record "Add to pipeline")
 
 lib/
   hubspot.js              HubSpot API client: auth, batched/paged search,
                           associations, 429 backoff, scope-error detection
   respond.js              shared response helpers (cache headers, error mapping) — HubSpot modules only
-  db.js                   Neon (Postgres) client getter for the Sales Pipeline module
+  db.js                   Neon (Postgres) client getter, shared by the Sales Pipeline and Demo Calls modules
   abm.js                  ABM shaping logic (buildAbmPayload) for api/abm/index.js
   abm-segments/
     index.js              registry of all ABM segments
@@ -63,9 +69,14 @@ lib/
     constants.js            stage/scale/source vocabulary
     queries.js               all SQL for the pipeline_leads/notes/stage_history tables
     respond.js                DB error → HTTP status mapping (mirrors lib/respond.js)
+  demo-calls/
+    constants.js            outcome/status vocabulary
+    queries.js               all SQL for the demo_call_leads/demo_call_logs tables
+    respond.js                DB error → HTTP status mapping (mirrors lib/pipeline/respond.js)
 
 db/
-  schema.sql              source of truth for the Sales Pipeline Postgres schema — run by hand, no migration framework
+  schema.sql              human-readable snapshot of the full Postgres schema (not run directly)
+  migrations/              numbered, idempotent .sql files — the actual source of truth, applied via `npm run migrate`
 
 src/
   main.jsx, App.jsx        entry + router + layout (App.jsx also mounts NameTagProvider)
@@ -79,14 +90,18 @@ src/
                 StageChangeModal, NotesTimeline, usePipelineData,
                 usePipelineMutations, constants.js
     marketing/  MarketingPage, AdLeadsTable, useMarketingData (Performance Marketing)
+    demo-calls/ DemoCallsPage, DemoCallsTable, DemoCallLeadDrawer,
+                CallLogTimeline, AddDemoCallLeadModal, MarkIrrelevantModal,
+                DeleteDemoCallLeadModal, useDemoCallsData,
+                useDemoCallsMutations, useLiveDemoCallContacts, constants.js
   hooks/
     useApiData      generic {data, loading, error, refresh} fetch, cached +
                     stale-while-revalidate, 5min background poll — read-only
     useApiMutation  generic {mutate, loading, error} POST/PATCH wrapper — the
-                    app's only mutation primitive, used by the pipeline module
+                    app's mutation primitive, used by the pipeline and demo-calls modules
     useTheme        light/dark toggle, persisted to localStorage
-    useNameTag      honor-system identity for pipeline attribution, persisted
-                    to localStorage
+    useNameTag      honor-system identity for pipeline/demo-calls attribution,
+                    persisted to localStorage
   context/
     NameTagContext.jsx  ensureName() gate — prompts once via NameTagModal if
                         no name is stored yet, mounted at the app root
@@ -95,7 +110,7 @@ src/
                             useAllAbmData) for the stale-while-revalidate cache
     pipelineIntegration.js   the one cross-module seam — usePipelineCheck +
                             prefill helpers used by AbmPage/MarketingPage's
-                            "Add to pipeline" action
+                            and DemoCallLeadDrawer's "Add to pipeline" action
 ```
 
 `DataTable` is the biggest reuse win: every table in the app (leads, deals,
@@ -121,13 +136,16 @@ For a typical **read-only HubSpot** module:
 3. Register the route in `src/App.jsx` and add a nav entry in
    `src/components/TopNav.jsx`'s `MODULES` array.
 
-For a **database-backed, writable** module (so far, only Sales Pipeline is
-one), follow the pattern in `lib/pipeline/` + `api/pipeline/**` instead:
-SQL lives in `lib/<module>/queries.js` behind `lib/db.js`'s `getSql()`,
-errors map through `lib/<module>/respond.js` (`withDbErrorHandling`, mirrors
+For a **database-backed, writable** module (Sales Pipeline and Demo Calls
+are the two so far), follow the pattern in `lib/pipeline/` + `api/pipeline/**`
+(or `lib/demo-calls/` + `api/demo-calls/**`) instead: SQL lives in
+`lib/<module>/queries.js` behind `lib/db.js`'s `getSql()`, errors map through
+`lib/<module>/respond.js` (`withDbErrorHandling`, mirrors
 `withHubspotErrorHandling`), responses are `Cache-Control: no-store`, and
 mutations on the frontend go through `useApiMutation` rather than
-`useApiData`. Add a `db/schema.sql` migration for any new tables.
+`useApiData`. Add a new numbered file to `db/migrations/` for any schema
+change (never edit an already-applied one), then update `db/schema.sql`'s
+snapshot to match.
 
 ## Adding a new ABM segment (e.g. CPG, F&B)
 
@@ -158,8 +176,10 @@ disappears (no code change needed) if you ever want to hide one.
 | Performance Marketing — leads/funnel | `crm.objects.contacts.read` (meetings read is bundled with it on this portal) | ✅ granted — no new scope needed |
 | Performance Marketing — ad spend / live campaigns | `marketing.campaigns.read` | ❌ not available on current plan |
 
-Sales Pipeline no longer reads from HubSpot at all (see below) — it needs no
-HubSpot scope, only `DATABASE_URL`.
+Sales Pipeline and Demo Calls don't read from HubSpot at all on the backend
+(see below) — they need no HubSpot scope, only `DATABASE_URL`. Demo Calls'
+frontend does read live ABM/Marketing data client-side to detect who's
+reached the Demo Call stage, so it's still gated on those modules' scopes.
 
 Add scopes in the HubSpot Private App UI; no redeploy is needed, the token is
 read fresh on every request.
@@ -176,7 +196,7 @@ earlier version of this page that was a read-only view of live HubSpot
 deals — that concept didn't match how deals are actually tracked here and
 was dropped, not extended.
 
-- **Schema**: `db/schema.sql` — three tables. `pipeline_leads` (one row per
+- **Schema**: `db/migrations/` (see `db/schema.sql` for a readable snapshot) — three tables. `pipeline_leads` (one row per
   lead, current `stage` + a denormalized `prior_active_stage` for reviving
   from Cold/Lost), `pipeline_lead_notes` (append-only — a separate table
   rather than a JSONB array specifically so two people adding a note at once
@@ -210,6 +230,54 @@ was dropped, not extended.
   good. This is the one place in the module where a mistake genuinely can't
   be undone; the type-to-confirm step is the only safeguard, given there's
   no real access control.
+
+## Demo Calls data model
+
+Demo Calls (`/demo-calls`) tracks what happens *after* a lead reaches
+HubSpot's Demo Call lifecycle stage (see "Demo Call / Meeting tracking"
+below) — first/second/third+ call log entries, a no-show outcome, next
+steps, a transcript link, and a handoff into Sales Pipeline. It's
+database-backed like Sales Pipeline, but the backend never touches HubSpot
+itself: detecting *who's* reached Demo Call happens live, client-side, by
+reusing the same data ABM (`useAllAbmData`) and Performance Marketing
+(`useAdLeadsData("lifetime")`) already fetch (`useLiveDemoCallContacts.js`)
+— no new HubSpot scope, no polling/webhook infrastructure, consistent with
+the rest of the app having no scheduled sync.
+
+- **Schema**: `db/migrations/0005_add_demo_calls.sql` + `0006_..._fk_set_null.sql`
+  — two tables. `demo_call_leads` (one row per tracked lead — `status`
+  active/irrelevant, optional `hubspot_contact_id`/`hubspot_origin_module`,
+  and `pipeline_lead_id` once handed off — `on delete set null` so deleting
+  the Pipeline lead un-links rather than failing outright), `demo_call_logs`
+  (one row per call attempt — `call_number` 1/2/3/..., `outcome`
+  completed/no_show, notes/next_steps/transcript_url — open-ended rather
+  than a fixed 3-slot form, and **editable** after creation, unlike
+  Pipeline's append-only notes, since a call's fields legitimately fill in
+  incrementally).
+- **No DB row on read**: a live HubSpot contact newly at Demo Call with no
+  tracked row yet is rendered as a "virtual" row (`DemoCallsTable.jsx`,
+  `_kind: "virtual"`) prompting "Log first call" — nothing is persisted
+  until a rep actually clicks it. This keeps `GET /api/demo-calls`
+  side-effect free and avoids the DB filling with rows nobody looks at.
+  `createLead()` (`lib/demo-calls/queries.js`) accepts an optional
+  `first_call` payload so "create the lead" and "log its first call" are one
+  request/transaction, not two.
+- **Funnel/KPIs are a live aggregate, not a stored counter**: `listLeads()`
+  joins each lead against a `lateral` subquery over `demo_call_logs` (call
+  count, no-show count, most recent call) computed in one round trip; the
+  funnel (Call 1/2/3 done, no-shows, added to pipeline, irrelevant) is
+  derived from that in `summarize()` — mirrored client-side in
+  `summarizeLeads()` (`src/modules/demo-calls/constants.js`) the same way
+  Pipeline's `summarize()`/`summarizeLeads()` pair works.
+- **"Add to pipeline"**: `demoCallLeadToPipelinePrefill()`
+  (`src/lib/pipelineIntegration.js`) is the same snapshot-copy pattern as
+  ABM/Marketing's bridge (`source: "Demo Call"`, `source_locked: true`), but
+  the frontend also calls `POST /api/demo-calls/:id/link-pipeline`
+  afterward to record `pipeline_lead_id` back on the Demo Calls row — this
+  works even for manually-entered leads with no `hubspot_contact_id`, since
+  the link is keyed by the Demo Calls row id, not a HubSpot id.
+- **Attribution/delete**: same honor-system `NameTagContext` attribution and
+  type-to-confirm hard delete as Sales Pipeline (`DeleteDemoCallLeadModal.jsx`).
 
 ## Performance Marketing — two independently-gated data sources
 

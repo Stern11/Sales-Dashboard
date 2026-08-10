@@ -58,6 +58,26 @@ h2 { font-size: 14px; margin: 0 0 10px; color: var(--text-primary); }
 .funnel-bar:hover { filter: brightness(1.1); }
 .funnel-count { width: 44px; flex-shrink: 0; font-size: 12.5px; color: var(--text-primary); font-weight: 600; font-variant-numeric: tabular-nums; }
 
+/* Chart legend — line-key swatches (a short stroke, not a filled box) mirroring a line chart's own marks. */
+.chart-legend { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 10px; }
+.chart-legend-item { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text-secondary); }
+.chart-legend-swatch { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+
+/* WeeklyTrendChart's hover tooltip — chart-relative (absolute inside the
+   .chart-card, not position:fixed), with a color key per row so a value is
+   never disconnected from which line it belongs to. */
+.trend-tooltip {
+  position: absolute; pointer-events: none; z-index: 20;
+  background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px 12px; min-width: 168px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+}
+.trend-tooltip-title { font-size: 12px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; }
+.trend-tooltip-row { display: flex; align-items: center; gap: 7px; font-size: 12px; padding: 2px 0; }
+.trend-tooltip-key { width: 10px; height: 3px; border-radius: 2px; flex-shrink: 0; }
+.trend-tooltip-label { color: var(--text-secondary); flex: 1; }
+.trend-tooltip-value { color: var(--text-primary); font-weight: 700; font-variant-numeric: tabular-nums; }
+
 /* Trend chart (weekly/monthly bars) */
 .trend-chart { display: flex; align-items: flex-end; gap: 6px; height: 140px; padding-top: 8px; }
 .trend-bar-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; justify-content: flex-end; }
