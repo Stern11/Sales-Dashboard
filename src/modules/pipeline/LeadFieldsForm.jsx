@@ -15,8 +15,13 @@ export function LeadFieldsForm({ values, onChange, sourceLocked, disabled, hideP
   // typing" and a blank/never-chosen value).
   const sourceCategory = SOURCE_CATEGORIES.includes(values.source) ? values.source : SOURCE_OTHER;
 
-  // Region is optional (unlike source) — "" means unset, shown as "—".
-  const regionCategory = !values.region
+  // Region is optional (unlike source) — null means unset, shown as "—".
+  // Deliberately `== null`, not the falsier `!values.region`: picking
+  // "Other" sets region to "" (not null) until the rep types something, and
+  // treating that "" the same as null collapsed straight back to "—" the
+  // instant "Other" was chosen — the Specify-region input never had a
+  // chance to appear.
+  const regionCategory = values.region == null
     ? ""
     : REGION_CATEGORIES.includes(values.region) ? values.region : REGION_OTHER;
 

@@ -6,7 +6,7 @@
   "description": "Modular, live HubSpot-backed stakeholder dashboard — ABM outreach, Sales Pipeline, Marketing Campaigns.",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "node scripts/migrate.js --if-configured && vite build",
     "preview": "vite preview",
     "test": "vitest run",
     "migrate": "node --env-file=.env.local scripts/migrate.js"

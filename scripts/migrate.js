@@ -12,6 +12,20 @@
 //   DATABASE_URL=<prod-url> npm run migrate       # prod — shell-exported var wins over .env.local
 //                                                  # (Node's --env-file never overrides an
 //                                                  # already-set process.env value)
+//   node scripts/migrate.js --if-configured       # used by `npm run build` (see package.json) so
+//                                                  # every Vercel deploy (prod and preview) applies
+//                                                  # pending migrations automatically — a deploy
+//                                                  # that shipped code expecting a table/column
+//                                                  # nobody migrated in was exactly the bug this
+//                                                  # closes. --if-configured only softens the
+//                                                  # *missing* DATABASE_URL case (a bare checkout
+//                                                  # with no DB set up yet, e.g. someone forking
+//                                                  # this repo before running the app's own setup)
+//                                                  # to a skip instead of a failed build; a real
+//                                                  # connection or SQL error still fails the build
+//                                                  # either way, which is the point — better to
+//                                                  # block a deploy than ship one against a schema
+//                                                  # that doesn't match.
 
 import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -40,9 +54,13 @@ export function splitStatements(fileText) {
     });
 }
 
-async function run() {
+async function run({ ifConfigured = false } = {}) {
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) {
+    if (ifConfigured) {
+      console.log("DATABASE_URL not set — skipping migration (--if-configured).");
+      return;
+    }
     console.error(
       "DATABASE_URL is not set.\n" +
       "  Dev:  run `vercel env pull .env.local` first, then `npm run migrate`.\n" +
@@ -87,7 +105,8 @@ async function run() {
 // when imported — test/scripts/migrate.test.js imports splitStatements()
 // without wanting to trigger a real migration run as a side effect.
 if (import.meta.url === `file://${process.argv[1]}`) {
-  run().catch((err) => {
+  const ifConfigured = process.argv.includes("--if-configured");
+  run({ ifConfigured }).catch((err) => {
     console.error("Migration failed:", err.message);
     process.exit(1);
   });

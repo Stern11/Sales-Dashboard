@@ -66,12 +66,19 @@ run `vercel env pull .env.local` to sync them down.
    in `db/migrations/` in order. Safe to re-run any time; already-applied
    migrations are tracked in a `schema_migrations` table and skipped.
 3. Adding a schema change later: add a new numbered file to
-   `db/migrations/` (never edit an already-applied one), run `npm run
-   migrate` locally against dev, then run it again against production with
-   `DATABASE_URL=<prod-connection-string> npm run migrate` (a shell-exported
-   `DATABASE_URL` always wins over `.env.local`'s). See
-   `db/schema.sql` for a human-readable snapshot of the full current schema
-   (not run directly — `db/migrations/` is the source of truth).
+   `db/migrations/` (never edit an already-applied one) and run `npm run
+   migrate` locally against dev to verify it. You don't need to run it
+   against production yourself — `npm run build` runs `node scripts/migrate.js
+   --if-configured` before `vite build` (see `package.json`), and Vercel
+   invokes that build command on every deploy with that deployment's own
+   `DATABASE_URL` already in scope, so pending migrations apply
+   automatically as part of shipping the code that needs them. `--if-configured`
+   only softens a *missing* `DATABASE_URL` (e.g. a fresh clone with no DB set
+   up yet) to a skip — a real connection or SQL error still fails the build,
+   which is the point: better to block a broken deploy than ship code
+   against a schema nobody migrated. See `db/schema.sql` for a
+   human-readable snapshot of the full current schema (not run directly —
+   `db/migrations/` is the source of truth).
 
 ### Dev vs. production data — use a separate Neon branch
 
@@ -90,9 +97,9 @@ database production users see. Recommended setup, using Neon's branching
 3. `vercel env pull .env.local` (used for local `vercel dev`) pulls the
    Development value by default — so local work and PR previews always hit
    the dev branch, never production.
-4. Apply schema changes (`npm run migrate`) to the dev branch first, verify,
-   then run the same command with `DATABASE_URL=<prod>` before/at deploy
-   time — see "Setting up the database (Sales Pipeline + Demo Calls)" above.
+4. Apply schema changes (`npm run migrate`) to the dev branch first and
+   verify — production applies automatically on deploy, see "Setting up the
+   database (Sales Pipeline + Demo Calls)" above.
 
 Without this split, there's only one database — fine to get started, but
 clean up any test leads (`select company_name from pipeline_leads;`) before

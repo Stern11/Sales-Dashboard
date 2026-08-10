@@ -145,7 +145,11 @@ are the two so far), follow the pattern in `lib/pipeline/` + `api/pipeline/**`
 mutations on the frontend go through `useApiMutation` rather than
 `useApiData`. Add a new numbered file to `db/migrations/` for any schema
 change (never edit an already-applied one), then update `db/schema.sql`'s
-snapshot to match.
+snapshot to match. `npm run build` (and so every Vercel deploy) runs pending
+migrations against that deployment's own `DATABASE_URL` before building —
+see README.md's "Setting up the database" section — so shipping a schema
+change and shipping the code that needs it happen together, not as two
+separate manual steps.
 
 ## Adding a new ABM segment (e.g. CPG, F&B)
 

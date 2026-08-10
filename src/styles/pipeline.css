@@ -162,10 +162,20 @@
 
 /* Notes timeline — input form first (see NotesTimeline.jsx), thread below */
 .add-note-form { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
-/* Browser-default placeholder color is too faint (especially against the
-   Next steps card's blue tint) — darken it without making it read as real
-   (already-typed) text. */
-.add-note-form textarea::placeholder { color: var(--text-muted); opacity: 1; }
+/* MentionTextarea.jsx's <textarea> has no wrapping .form-grid, so it never
+   picked up that class's base input style — it was rendering with raw
+   browser defaults (stark white background, default font), which read as
+   much higher-contrast than every other field once sitting inside the Next
+   steps card's blue tint. Give it the same base look here explicitly. */
+.add-note-form textarea {
+  border: 1px solid var(--border); background: var(--page-plane); color: var(--text-primary);
+  border-radius: 6px; padding: 8px 10px; font-size: 13px; font-family: inherit; font-weight: 400;
+  resize: vertical; min-height: 70px;
+}
+/* Browser-default placeholder color is too faint on its own, but full
+   --text-muted opacity read as too close to real typed text — split the
+   difference. */
+.add-note-form textarea::placeholder { color: var(--text-muted); opacity: 0.75; }
 .notes-timeline { display: flex; flex-direction: column; gap: 10px; }
 .note-item { border: 1px solid var(--border); border-radius: 8px; padding: 9px 11px; background: var(--page-plane); }
 .note-item-meta { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--text-muted); margin-bottom: 4px; }
