@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { OUTCOME_VALUES, isValidOutcome, STATUS_VALUES, isValidStatus } from "../../../lib/demo-calls/constants.js";
+import { OUTCOME_VALUES, isValidOutcome, STATUS_VALUES, isValidStatus, COMPANY_SCALE_OPTIONS, isValidCompanyScale } from "../../../lib/demo-calls/constants.js";
 
 describe("isValidOutcome", () => {
   it("accepts every declared outcome value", () => {
@@ -19,5 +19,19 @@ describe("isValidStatus", () => {
   it("rejects unknown values", () => {
     expect(isValidStatus("bogus")).toBe(false);
     expect(isValidStatus(undefined)).toBe(false);
+  });
+});
+
+describe("isValidCompanyScale", () => {
+  it("accepts every declared option", () => {
+    for (const o of COMPANY_SCALE_OPTIONS) expect(isValidCompanyScale(o.value)).toBe(true);
+  });
+  it("null/undefined/'' are all valid — scale is optional, and '' is what an unselected <select> sends", () => {
+    expect(isValidCompanyScale(null)).toBe(true);
+    expect(isValidCompanyScale(undefined)).toBe(true);
+    expect(isValidCompanyScale("")).toBe(true);
+  });
+  it("rejects an unknown value", () => {
+    expect(isValidCompanyScale("giant")).toBe(false);
   });
 });

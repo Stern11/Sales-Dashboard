@@ -1,4 +1,10 @@
-// GET /api/demo-calls — full lead list + funnel/KPI summary.
+// GET /api/demo-calls — full lead list + funnel/KPI summary. Also doubles as
+// the reverse "history for this pipeline lead" lookup via
+// ?pipeline_lead_id=<id> (used by the Sales Pipeline drawer's "View Demo
+// Call History" button) — folded in here rather than its own route file to
+// stay within Vercel Hobby's 12-serverless-function cap per deployment
+// (every file under api/ is its own function; see api/demo-calls/[id].js
+// for the same reasoning behind its own consolidation).
 // POST /api/demo-calls — create a lead: manual entry, or the target of
 // "Log first call" on a live-but-untracked HubSpot contact (accepts an
 // optional `first_call` payload to create the lead and its first call log
@@ -11,7 +17,7 @@
 // useLiveDemoCallContacts.js).
 
 import { withDbErrorHandling, ValidationError, ConflictError } from "../../lib/demo-calls/respond.js";
-import { listLeads, createLead, getLeadByHubspotContactId } from "../../lib/demo-calls/queries.js";
+import { listLeads, createLead, getLeadByHubspotContactId, getLeadByPipelineLeadId, listCalls } from "../../lib/demo-calls/queries.js";
 import { isValidOutcome, isValidCompanyScale } from "../../lib/demo-calls/constants.js";
 
 function validateCreateBody(body) {
@@ -27,6 +33,16 @@ function validateCreateBody(body) {
 
 export default async function handler(req, res) {
   if (req.method === "GET") {
+    const { pipeline_lead_id } = req.query;
+    if (pipeline_lead_id) {
+      await withDbErrorHandling(res, async () => {
+        const lead = await getLeadByPipelineLeadId(pipeline_lead_id);
+        if (!lead) return { lead: null, calls: [] };
+        const calls = await listCalls(lead.id);
+        return { lead, calls };
+      });
+      return;
+    }
     await withDbErrorHandling(res, () => listLeads());
     return;
   }

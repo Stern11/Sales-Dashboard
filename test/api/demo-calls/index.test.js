@@ -6,10 +6,12 @@ vi.mock("../../../lib/demo-calls/queries.js", () => ({
   listLeads: vi.fn(),
   createLead: vi.fn(),
   getLeadByHubspotContactId: vi.fn(),
+  getLeadByPipelineLeadId: vi.fn(),
+  listCalls: vi.fn(),
 }));
 
-function mockReqRes({ method = "GET", body = {} } = {}) {
-  const req = { method, body };
+function mockReqRes({ method = "GET", body = {}, query = {} } = {}) {
+  const req = { method, body, query };
   const res = { statusCode: null, body: null };
   res.status = vi.fn((c) => { res.statusCode = c; return res; });
   res.json = vi.fn((b) => { res.body = b; return res; });
@@ -17,21 +19,42 @@ function mockReqRes({ method = "GET", body = {} } = {}) {
   return { req, res };
 }
 
-describe("GET /api/demo-calls", () => {
-  beforeEach(() => vi.clearAllMocks());
+beforeEach(() => vi.clearAllMocks());
 
+describe("GET /api/demo-calls", () => {
   it("returns the list payload", async () => {
     queries.listLeads.mockResolvedValue({ leads: [], summary: { total: 0 } });
     const { req, res } = mockReqRes({ method: "GET" });
     await handler(req, res);
     expect(res.statusCode).toBe(200);
     expect(res.body).toEqual({ leads: [], summary: { total: 0 } });
+    expect(queries.getLeadByPipelineLeadId).not.toHaveBeenCalled();
+  });
+});
+
+describe("GET /api/demo-calls?pipeline_lead_id=", () => {
+  it("returns {lead: null, calls: []} (200, not 404) when no Demo Calls history exists for this pipeline lead", async () => {
+    queries.getLeadByPipelineLeadId.mockResolvedValue(null);
+    const { req, res } = mockReqRes({ query: { pipeline_lead_id: "p1" } });
+    await handler(req, res);
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({ lead: null, calls: [] });
+    expect(queries.listCalls).not.toHaveBeenCalled();
+    expect(queries.listLeads).not.toHaveBeenCalled();
+  });
+
+  it("returns the lead and its calls when history exists", async () => {
+    queries.getLeadByPipelineLeadId.mockResolvedValue({ id: "dc1", company_name: "Acme" });
+    queries.listCalls.mockResolvedValue([{ id: "call-1", call_number: 1 }]);
+    const { req, res } = mockReqRes({ query: { pipeline_lead_id: "p1" } });
+    await handler(req, res);
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({ lead: { id: "dc1", company_name: "Acme" }, calls: [{ id: "call-1", call_number: 1 }] });
+    expect(queries.listCalls).toHaveBeenCalledWith("dc1");
   });
 });
 
 describe("POST /api/demo-calls", () => {
-  beforeEach(() => vi.clearAllMocks());
-
   it("400s when company_name is missing", async () => {
     const { req, res } = mockReqRes({ method: "POST", body: { contact_name: "Jane", actor: "Aryan" } });
     await handler(req, res);

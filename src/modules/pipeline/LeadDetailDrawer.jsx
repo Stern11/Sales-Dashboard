@@ -25,9 +25,10 @@ export function LeadDetailDrawer({ leadId, onClose, onChanged }) {
   const { ensureName } = useNameTagContext();
 
   // Most pipeline leads have no Demo Calls origin — this is a cheap, silent
-  // 200-with-null-lead miss in that case, not an error (see api/demo-calls/
-  // by-pipeline-lead/[pipelineLeadId].js). The button only appears on a hit.
-  const { data: demoHistory } = useApiData(leadId ? `/api/demo-calls/by-pipeline-lead/${leadId}` : null);
+  // 200-with-null-lead miss in that case, not an error (see the
+  // ?pipeline_lead_id= branch in api/demo-calls/index.js). The button only
+  // appears on a hit.
+  const { data: demoHistory } = useApiData(leadId ? `/api/demo-calls?pipeline_lead_id=${leadId}` : null);
 
   useEffect(() => {
     if (data?.lead) setValues(data.lead);

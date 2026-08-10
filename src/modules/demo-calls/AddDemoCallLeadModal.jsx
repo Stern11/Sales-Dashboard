@@ -42,7 +42,7 @@ export function AddDemoCallLeadModal({ onClose, onCreated, prefill }) {
 
     try {
       const { lead } = await createLead(
-        { ...values, first_call: callValues.outcome ? callValues : null },
+        { ...values, company_scale: values.company_scale || null, first_call: callValues.outcome ? callValues : null },
         actor
       );
       onCreated?.(lead);
