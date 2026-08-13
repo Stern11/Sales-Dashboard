@@ -47,12 +47,15 @@ api/
   pipeline/[id]/stage.js   → POST /api/pipeline/:id/stage (stage change, incl. cold/lost/revive)
   pipeline/[id]/notes.js   → POST /api/pipeline/:id/notes (append a note)
   pipeline/check.js        → GET /api/pipeline/check?contact_ids=... (bulk "already in pipeline" lookup)
-  demo-calls/index.js               → GET/POST /api/demo-calls (list+summary / create) — database-backed, not HubSpot
-  demo-calls/[id]/index.js          → GET/PATCH/DELETE /api/demo-calls/:id (detail+calls / edit fields / delete)
-  demo-calls/[id]/calls.js          → POST /api/demo-calls/:id/calls (append a call log entry)
-  demo-calls/[id]/calls/[callId].js → PATCH /api/demo-calls/:id/calls/:callId (edit a call log entry)
-  demo-calls/[id]/status.js         → POST /api/demo-calls/:id/status (active/irrelevant)
-  demo-calls/[id]/link-pipeline.js  → POST /api/demo-calls/:id/link-pipeline (record "Add to pipeline")
+  demo-calls/index.js  → GET/POST /api/demo-calls (list+summary / create — database-backed;
+                         also GET ?pipeline_lead_id=... reverse lookup and GET
+                         ?action=hubspot-engagements&contact_id=... — the one HubSpot read
+                         this module does, for the "Import from HubSpot" panel)
+  demo-calls/[id].js  → GET/PATCH/DELETE /api/demo-calls/:id (detail+calls / edit fields /
+                         delete), plus POST/PATCH ?action=calls|status|link-pipeline —
+                         consolidated into these two files (not one file per route) to stay
+                         within Vercel Hobby's 12-serverless-function-per-deployment cap; see
+                         each file's own header comment for the full route table
 
 lib/
   hubspot.js              HubSpot API client: auth, batched/paged search,
@@ -282,6 +285,32 @@ the rest of the app having no scheduled sync.
   the link is keyed by the Demo Calls row id, not a HubSpot id.
 - **Attribution/delete**: same honor-system `NameTagContext` attribution and
   type-to-confirm hard delete as Sales Pipeline (`DeleteDemoCallLeadModal.jsx`).
+- **Importing call history from HubSpot**: `ImportFromHubspotPanel.jsx`
+  (shown in `AddDemoCallLeadModal.jsx` for a "Log first call" open, and in
+  `DemoCallLeadDrawer.jsx` above the call log for an already-tracked lead)
+  lets a rep pull HubSpot's own record of a contact into the call log
+  instead of typing it from scratch — built for backfilling calls that
+  happened before this tracker existed. It reads only HubSpot **Meetings**
+  and **Notes** (`lib/demo-calls/hubspotEngagements.js`, surfaced via `GET
+  /api/demo-calls?action=hubspot-engagements&contact_id=<id>` — the one
+  HubSpot read this otherwise DB-only module does). **HubSpot Calls are
+  deliberately never fetched**: that object records SDR cold-calling
+  activity (dialing a lead), a different thing from a Demo Call in this
+  app (the team meeting the lead live, e.g. Google Meet) — importing a
+  Call as a demo-call log entry would be wrong, not just noisy. It also
+  never pre-fills an outcome as "Completed": HubSpot's
+  `hs_meeting_outcome` is frequently left unset by reps, so its absence
+  proves nothing — every imported row's outcome starts unset (the
+  `NO_SHOW` value, when HubSpot does have it, is shown as a badge hint,
+  never auto-applied) and a rep must explicitly confirm it before the row
+  can be imported. Selected rows are written through the exact same
+  `createLead`/`addCall` mutations manual entry uses, sequentially (not
+  parallel — `addCall` derives `call_number` from the current row count).
+  No new HubSpot scope was needed — Meetings read is already granted, same
+  scope Performance Marketing's meeting-count column already relies on
+  (see the scopes table above); Notes degrades to `notes_available: false`
+  if `crm.objects.notes.read` isn't granted, rather than failing the
+  fetch.
 
 ## Performance Marketing — two independently-gated data sources
 

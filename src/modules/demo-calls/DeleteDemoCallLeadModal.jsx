@@ -27,9 +27,9 @@ export function DeleteDemoCallLeadModal({ lead, onClose, onDeleted }) {
   }
 
   return (
-    <Modal title="Delete this lead?" onClose={onClose}>
+    <Modal title="Delete this opportunity?" onClose={onClose}>
       <p className="subtitle" style={{ marginBottom: 6 }}>
-        This permanently deletes <strong>{lead.company_name}</strong> — including its whole call
+        This permanently deletes <strong>{lead.company_name}</strong> — including its whole meeting
         log. This can't be undone.
       </p>
       <p className="subtitle" style={{ marginBottom: 14 }}>

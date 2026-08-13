@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { summarize } from "../../../lib/demo-calls/queries.js";
 
-function lead({ status = "active", call_count = 0, no_show_count = 0, pipeline_lead_id = null, company_scale = null } = {}) {
-  return { status, call_count, no_show_count, pipeline_lead_id, company_scale };
+function lead({ status = "active", call_count = 0, completed_count = call_count, no_show_count = 0, pipeline_lead_id = null, company_scale = null } = {}) {
+  return { status, call_count, completed_count, no_show_count, pipeline_lead_id, company_scale };
 }
 
 describe("summarize", () => {

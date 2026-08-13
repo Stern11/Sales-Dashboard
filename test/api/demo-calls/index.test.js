@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import handler from "../../../api/demo-calls/index.js";
 import * as queries from "../../../lib/demo-calls/queries.js";
+import * as hubspot from "../../../lib/hubspot.js";
+import * as hubspotEngagements from "../../../lib/demo-calls/hubspotEngagements.js";
 
 vi.mock("../../../lib/demo-calls/queries.js", () => ({
   listLeads: vi.fn(),
@@ -8,6 +10,15 @@ vi.mock("../../../lib/demo-calls/queries.js", () => ({
   getLeadByHubspotContactId: vi.fn(),
   getLeadByPipelineLeadId: vi.fn(),
   listCalls: vi.fn(),
+}));
+
+vi.mock("../../../lib/hubspot.js", async () => {
+  const actual = await vi.importActual("../../../lib/hubspot.js");
+  return { ...actual, getToken: vi.fn() };
+});
+
+vi.mock("../../../lib/demo-calls/hubspotEngagements.js", () => ({
+  fetchEngagementsForContact: vi.fn(),
 }));
 
 function mockReqRes({ method = "GET", body = {}, query = {} } = {}) {
@@ -51,6 +62,36 @@ describe("GET /api/demo-calls?pipeline_lead_id=", () => {
     expect(res.statusCode).toBe(200);
     expect(res.body).toEqual({ lead: { id: "dc1", company_name: "Acme" }, calls: [{ id: "call-1", call_number: 1 }] });
     expect(queries.listCalls).toHaveBeenCalledWith("dc1");
+  });
+});
+
+describe("GET /api/demo-calls?action=hubspot-engagements", () => {
+  it("400s when contact_id is missing", async () => {
+    const { req, res } = mockReqRes({ query: { action: "hubspot-engagements" } });
+    await handler(req, res);
+    expect(res.statusCode).toBe(400);
+    expect(hubspotEngagements.fetchEngagementsForContact).not.toHaveBeenCalled();
+  });
+
+  it("returns the fetched engagements for a given contact_id", async () => {
+    hubspot.getToken.mockReturnValue("tok");
+    hubspotEngagements.fetchEngagementsForContact.mockResolvedValue({
+      engagements: [{ id: "m1", type: "meeting" }],
+      notes_available: true,
+    });
+    const { req, res } = mockReqRes({ query: { action: "hubspot-engagements", contact_id: "999" } });
+    await handler(req, res);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.engagements).toEqual([{ id: "m1", type: "meeting" }]);
+    expect(hubspotEngagements.fetchEngagementsForContact).toHaveBeenCalledWith("tok", "999");
+    expect(queries.listLeads).not.toHaveBeenCalled();
+  });
+
+  it("maps a HubspotConfigError (missing HUBSPOT_TOKEN) to a 500 with a clear message", async () => {
+    hubspot.getToken.mockImplementation(() => { throw new hubspot.HubspotConfigError("HUBSPOT_TOKEN environment variable is not set on this deployment."); });
+    const { req, res } = mockReqRes({ query: { action: "hubspot-engagements", contact_id: "999" } });
+    await handler(req, res);
+    expect(res.statusCode).toBe(500);
   });
 });
 

@@ -32,7 +32,7 @@ function CallForm({ initial, onCancel, onSubmit, loading, submitLabel }) {
         </label>
       </div>
       <label>
-        Call notes
+        Meeting notes
         <textarea value={values.notes || ""} onChange={(e) => patch({ notes: e.target.value })} placeholder="What was discussed…" />
       </label>
       <label>
@@ -67,7 +67,7 @@ function CallEntry({ call, onSaved }) {
   if (editing) {
     return (
       <div className="note-item">
-        <div className="note-item-meta"><span>Editing Call {call.call_number}</span></div>
+        <div className="note-item-meta"><span>Editing Meeting {call.call_number}</span></div>
         <CallForm
           initial={{
             call_date: call.call_date || "", outcome: call.outcome,
@@ -89,11 +89,11 @@ function CallEntry({ call, onSaved }) {
     <div className="note-item">
       <div className="call-entry-header">
         <div className="call-entry-title">
-          <span className="call-entry-number">Call {call.call_number}</span>
+          <span className="call-entry-number">Meeting {call.call_number}</span>
           <span className="call-entry-date">{formatCallDate(call.call_date) || "No date set"}</span>
           <StatusPill variant={outcomeMeta(call.outcome).pillVariant}>{outcomeMeta(call.outcome).label}</StatusPill>
         </div>
-        <button type="button" className="icon-btn" onClick={() => setEditing(true)} aria-label="Edit call">✎</button>
+        <button type="button" className="icon-btn" onClick={() => setEditing(true)} aria-label="Edit meeting">✎</button>
       </div>
       <div className="note-item-meta" style={{ marginBottom: 8 }}>
         <span>Logged by {call.created_by}</span>
@@ -142,7 +142,7 @@ export function CallLogTimeline({ leadId, calls, onChanged }) {
         {calls.map((c) => (
           <CallEntry key={c.id} call={{ ...c, lead_id: leadId }} onSaved={onChanged} />
         ))}
-        {calls.length === 0 && !adding && <p className="notes-empty">No calls logged yet.</p>}
+        {calls.length === 0 && !adding && <p className="notes-empty">No meetings logged yet.</p>}
       </div>
       {adding ? (
         <>
@@ -151,12 +151,12 @@ export function CallLogTimeline({ leadId, calls, onChanged }) {
             onCancel={calls.length > 0 ? () => setAdding(false) : undefined}
             onSubmit={handleAdd}
             loading={loading}
-            submitLabel={`Log Call ${calls.length + 1}`}
+            submitLabel={`Log Meeting ${calls.length + 1}`}
           />
           {error && <p className="form-error">{error}</p>}
         </>
       ) : (
-        <button type="button" className="btn" onClick={() => setAdding(true)}>+ Log Call {calls.length + 1}</button>
+        <button type="button" className="btn" onClick={() => setAdding(true)}>+ Log Meeting {calls.length + 1}</button>
       )}
     </div>
   );

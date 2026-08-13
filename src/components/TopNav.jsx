@@ -3,7 +3,7 @@ import { useTheme } from "../hooks/useTheme.js";
 
 const MODULES = [
   { to: "/pipeline", label: "Sales Pipeline" },
-  { to: "/demo-calls", label: "Demo Calls" },
+  { to: "/demo-calls", label: "Meetings" },
   { to: "/marketing", label: "Performance Marketing" },
   { to: "/abm", label: "ABM Outreach" },
 ];

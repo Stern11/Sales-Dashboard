@@ -36,7 +36,7 @@ function SelectCell({ row, selectedIds, onToggleSelect }) {
  * Rows are a mix of tracked demo_call_leads rows (`_kind: "tracked"`) and
  * live-but-untracked HubSpot contacts (`_kind: "virtual"` — reached the Demo
  * Call stage but nobody's logged a call yet). Clicking a tracked row opens
- * its detail drawer; clicking a virtual row opens "Log first call" prefilled
+ * its detail drawer; clicking a virtual row opens "Log first meeting" prefilled
  * from the live contact. Neither is persisted just by appearing here — see
  * useLiveDemoCallContacts.js.
  */
@@ -88,7 +88,7 @@ export function DemoCallsTable({ rows, onOpenLead, onLogFirstCall, selectedIds, 
           sortValue: (r) => (r._kind === "virtual" ? "not_logged" : effectiveStatus(r.status, r.last_call_outcome)),
           render: (r) =>
             r._kind === "virtual"
-              ? <StatusPill variant="notstarted">Not logged — click to log first call</StatusPill>
+              ? <StatusPill variant="notstarted">Not logged — click to log first meeting</StatusPill>
               : (() => {
                   const eff = effectiveStatus(r.status, r.last_call_outcome);
                   return <StatusPill variant={statusMeta(eff).pillVariant}>{statusMeta(eff).label}</StatusPill>;
@@ -96,13 +96,13 @@ export function DemoCallsTable({ rows, onOpenLead, onLogFirstCall, selectedIds, 
         },
         {
           key: "call_count",
-          label: "Calls",
+          label: "Meetings",
           sortValue: (r) => Number(r.call_count) || 0,
           render: (r) => (r._kind === "tracked" ? Number(r.call_count) || 0 : "—"),
         },
         {
           key: "last_call_outcome",
-          label: "Last call",
+          label: "Last meeting",
           sortable: false,
           render: (r) =>
             r._kind === "tracked" && r.last_call_outcome

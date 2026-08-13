@@ -8,6 +8,13 @@ const PAD_RIGHT = 12;
 const PAD_TOP = 30; // room for month labels above the plot
 const PAD_BOTTOM = 30;
 
+// Fraction of each week's slot left empty between one week's group of bars
+// and the next, so groups read as visually separated clusters ("clear weekly
+// segregation") rather than one continuous block.
+const GROUP_PADDING_RATIO = 0.18;
+// Gap between the bars within a single week's group.
+const BAR_GAP = 2;
+
 function monthOf(weekStartIso) {
   return new Date(`${weekStartIso}T00:00:00Z`).getUTCMonth();
 }
@@ -16,28 +23,44 @@ function monthLabel(weekStartIso) {
 }
 
 /**
- * Week-on-week comparison of the funnel stages (booked / call 1 / call 2 /
- * added to pipeline / irrelevant) — 5 series, so per the dataviz method a
- * legend is mandatory (past ~4 series, converging lines make direct labels
- * unreadable). Colors reuse this app's existing stage/status tokens
- * (FUNNEL_TREND_SERIES in constants.js) rather than a new palette.
+ * Week-on-week comparison of the funnel stages, as a grouped bar chart — one
+ * bar per series (booked / meeting 1 / added to pipeline; see
+ * FUNNEL_TREND_SERIES in constants.js) per week, all 3 bars in a week sharing
+ * one x-slot. Each series keeps one fixed color across every week (not one
+ * color per week) with a legend mapping color to metric, since bars carry no
+ * inline label of their own. Colors reuse this app's existing stage/status
+ * tokens rather than a new palette.
  *
  * Every week gets its own gridline so week boundaries are never implied —
- * they're drawn. A bucket that starts a new calendar month gets a bolder,
- * dashed divider plus the month name above the plot, so "where does the
- * month change" is answered by the chart itself, not left to the reader to
- * count weeks. Hand-built SVG — the app has no charting library.
+ * they're drawn — and a slice of each slot is left empty between groups so
+ * adjacent weeks never visually merge. Weeks are numbered sequentially (W1 =
+ * the first column of whatever window is currently visible, see
+ * weeklyFunnelTrend()'s rolling window) rather than resetting per calendar
+ * month, since the window itself is capped at a handful of weeks. A bucket
+ * that starts a new calendar month still gets a bolder, dashed divider plus
+ * the month name above the plot, so "where does the month change" is
+ * answered by the chart itself. Hand-built SVG — the app has no charting
+ * library.
  */
 export function WeeklyTrendChart({ buckets }) {
   const [hoverIdx, setHoverIdx] = useState(null);
   const [tooltipPos, setTooltipPos] = useState(null);
 
-  const maxValue = Math.max(1, ...buckets.map((b) => Math.max(b.booked, b.call_1_done, b.call_2_done, b.added_to_pipeline, b.irrelevant)));
+  const maxValue = Math.max(1, ...buckets.flatMap((b) => FUNNEL_TREND_SERIES.map((s) => b[s.key])));
   const plotW = WIDTH - PAD_LEFT - PAD_RIGHT;
   const plotH = HEIGHT - PAD_TOP - PAD_BOTTOM;
-  const xFor = (i) => PAD_LEFT + (buckets.length === 1 ? plotW / 2 : (i / (buckets.length - 1)) * plotW);
-  const yFor = (v) => PAD_TOP + plotH - (v / maxValue) * plotH;
   const slotW = plotW / buckets.length;
+  // Band scale, not a point scale: each week gets an equal-width slot tiled
+  // across the plot, and xFor(i) is that slot's center. A point scale (which
+  // the old line chart used — points spaced from 0 to plotW, anchored exactly
+  // on the left/right plot edges) puts a bar *group*'s center right on the
+  // edge, so with few weeks (wide slots) half the group spills outside the
+  // plot area entirely.
+  const xFor = (i) => PAD_LEFT + (i + 0.5) * slotW;
+  const yFor = (v) => PAD_TOP + plotH - (v / maxValue) * plotH;
+  const baselineY = yFor(0);
+  const groupW = slotW * (1 - GROUP_PADDING_RATIO);
+  const barW = (groupW - BAR_GAP * (FUNNEL_TREND_SERIES.length - 1)) / FUNNEL_TREND_SERIES.length;
 
   // Capped at maxValue so a small range (e.g. max=2) never rounds two ticks
   // to the same integer — dedupe as a second guard against the same thing.
@@ -47,18 +70,6 @@ export function WeeklyTrendChart({ buckets }) {
   const monthStarts = buckets
     .map((b, i) => ({ i, isStart: i === 0 || monthOf(b.week_start) !== monthOf(buckets[i - 1].week_start) }))
     .filter((m) => m.isStart);
-
-  // Position within its month (W1, W2, ...) rather than a calendar date —
-  // resets to 1 at every month boundary computed above.
-  const weekInMonth = [];
-  for (let i = 0; i < buckets.length; i++) {
-    const isMonthStart = i === 0 || monthOf(buckets[i].week_start) !== monthOf(buckets[i - 1].week_start);
-    weekInMonth.push(isMonthStart ? 1 : weekInMonth[i - 1] + 1);
-  }
-
-  function pathFor(key) {
-    return buckets.map((b, i) => `${i === 0 ? "M" : "L"}${xFor(i)},${yFor(b[key])}`).join(" ");
-  }
 
   function handleMove(e, i) {
     setHoverIdx(i);
@@ -81,14 +92,14 @@ export function WeeklyTrendChart({ buckets }) {
           </span>
         ))}
       </div>
-      <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} width="100%" height={HEIGHT} role="img" aria-label="Weekly demo call funnel trend">
-        {/* Axis title — so the 0/1/2/3 ticks read as "N leads", not bare numbers. */}
+      <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} width="100%" height={HEIGHT} role="img" aria-label="Weekly meeting funnel trend">
+        {/* Axis title — so the 0/1/2/3 ticks read as "N opportunities", not bare numbers. */}
         <text
           x={14} y={PAD_TOP + plotH / 2}
           textAnchor="middle" fontSize="10" fill="var(--text-muted)"
           transform={`rotate(-90, 14, ${PAD_TOP + plotH / 2})`}
         >
-          Leads
+          Opportunities
         </text>
         {/* Horizontal value gridlines */}
         {tickValues.map((v, i) => (
@@ -116,42 +127,63 @@ export function WeeklyTrendChart({ buckets }) {
           </g>
         ))}
 
-        {FUNNEL_TREND_SERIES.map((s) => (
-          <path key={s.key} d={pathFor(s.key)} fill="none" stroke={s.color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
-        ))}
-
-        {buckets.map((b, i) => (
-          <g key={b.week_start}>
-            {/* Transparent hit column — the crosshair's hit target is the whole week slot, not the 2px line. */}
-            <rect
-              x={xFor(i) - slotW / 2}
-              y={PAD_TOP}
-              width={slotW}
-              height={plotH}
-              fill="transparent"
-              onMouseMove={(e) => handleMove(e, i)}
-              onMouseLeave={() => { setHoverIdx(null); setTooltipPos(null); }}
-            />
-            {hoverIdx === i && (
-              <rect x={xFor(i) - slotW / 2} y={PAD_TOP} width={slotW} height={plotH} fill="var(--page-plane)" opacity="0.6" pointerEvents="none" />
-            )}
-            {FUNNEL_TREND_SERIES.map((s) => (
-              <circle
-                key={s.key}
-                cx={xFor(i)}
-                cy={yFor(b[s.key])}
-                r={hoverIdx === i ? 4 : 3}
-                fill={s.color}
-                stroke="var(--surface-1)"
-                strokeWidth="2"
-                pointerEvents="none"
+        {buckets.map((b, i) => {
+          const groupStart = xFor(i) - groupW / 2;
+          return (
+            <g key={b.week_start}>
+              {/* Transparent hit column — the hover target is the whole week slot, not just the bars. */}
+              <rect
+                x={xFor(i) - slotW / 2}
+                y={PAD_TOP}
+                width={slotW}
+                height={plotH}
+                fill="transparent"
+                onMouseMove={(e) => handleMove(e, i)}
+                onMouseLeave={() => { setHoverIdx(null); setTooltipPos(null); }}
               />
-            ))}
-            <text x={xFor(i)} y={HEIGHT - 10} textAnchor="middle" fontSize="10" fill="var(--text-muted)" pointerEvents="none">
-              W{weekInMonth[i]}
-            </text>
-          </g>
-        ))}
+              {hoverIdx === i && (
+                <rect x={xFor(i) - slotW / 2} y={PAD_TOP} width={slotW} height={plotH} fill="var(--page-plane)" opacity="0.6" pointerEvents="none" />
+              )}
+              {FUNNEL_TREND_SERIES.map((s, k) => {
+                const barX = groupStart + k * (barW + BAR_GAP);
+                const barY = yFor(b[s.key]);
+                const barHeight = Math.max(0, baselineY - barY);
+                // Tall enough to hold a 10px label with a little padding
+                // (white, for contrast against the bar's own fill) — a bar
+                // too short to fit one instead gets its label just above,
+                // in the app's usual neutral ink.
+                const labelFitsInside = barHeight >= 16;
+                return (
+                  <g key={s.key}>
+                    <rect
+                      x={barX}
+                      y={barY}
+                      width={barW}
+                      height={barHeight}
+                      rx="2"
+                      fill={s.color}
+                      pointerEvents="none"
+                    />
+                    <text
+                      x={barX + barW / 2}
+                      y={labelFitsInside ? barY + 12 : barY - 4}
+                      textAnchor="middle"
+                      fontSize="10"
+                      fontWeight="600"
+                      fill={labelFitsInside ? "#fff" : "var(--text-secondary)"}
+                      pointerEvents="none"
+                    >
+                      {b[s.key]}
+                    </text>
+                  </g>
+                );
+              })}
+              <text x={xFor(i)} y={HEIGHT - 10} textAnchor="middle" fontSize="10" fill="var(--text-muted)" pointerEvents="none">
+                W{i + 1}
+              </text>
+            </g>
+          );
+        })}
       </svg>
       {hoverIdx !== null && tooltipPos && (
         <div
@@ -161,7 +193,7 @@ export function WeeklyTrendChart({ buckets }) {
             top: Math.max(tooltipPos.y - 10, 4),
           }}
         >
-          <div className="trend-tooltip-title">W{weekInMonth[hoverIdx]} · {monthLabel(buckets[hoverIdx].week_start)}</div>
+          <div className="trend-tooltip-title">W{hoverIdx + 1} · {monthLabel(buckets[hoverIdx].week_start)}</div>
           {FUNNEL_TREND_SERIES.map((s) => (
             <div className="trend-tooltip-row" key={s.key}>
               <span className="trend-tooltip-key" style={{ background: s.color }} />

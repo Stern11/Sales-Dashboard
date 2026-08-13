@@ -2,13 +2,14 @@ import { useState } from "react";
 import { Modal } from "../../components/Modal.jsx";
 import { useDemoCallsMutations } from "./useDemoCallsMutations.js";
 import { useNameTagContext } from "../../context/NameTagContext.jsx";
+import { ImportFromHubspotPanel } from "./ImportFromHubspotPanel.jsx";
 import { OUTCOME_OPTIONS, COMPANY_SCALE_OPTIONS } from "./constants.js";
 
 const EMPTY = { company_name: "", contact_name: "", email: "", phone: "", company_scale: "" };
 const NOT_LOGGED = "";
 
 /**
- * Manual entry ("+ Add Lead"), and also the target when a rep clicks a
+ * Manual entry ("+ Add Opportunity"), and also the target when a rep clicks a
  * live-but-untracked row (`prefill` carries company_name/contact_name/email/
  * hubspot_contact_id/hubspot_origin_module from useLiveDemoCallContacts.js —
  * those fields are locked since they come straight from HubSpot). Either
@@ -19,7 +20,8 @@ export function AddDemoCallLeadModal({ onClose, onCreated, prefill }) {
   const [values, setValues] = useState({ ...EMPTY, ...prefill });
   const [callValues, setCallValues] = useState({ call_date: "", outcome: NOT_LOGGED, notes: "", next_steps: "", transcript_url: "" });
   const [formError, setFormError] = useState(null);
-  const { createLead, loading } = useDemoCallsMutations();
+  const [importing, setImporting] = useState(false);
+  const { createLead, addCall, loading } = useDemoCallsMutations();
   const { ensureName } = useNameTagContext();
   const locked = !!prefill;
 
@@ -56,8 +58,47 @@ export function AddDemoCallLeadModal({ onClose, onCreated, prefill }) {
     }
   }
 
+  // Selected engagements from ImportFromHubspotPanel come pre-chronological.
+  // createLead's first_call payload only carries one call, so the first
+  // selected engagement rides along with lead creation and the rest are
+  // appended one at a time — sequentially, not in parallel, since addCall
+  // assigns call_number from the current row count and parallel requests
+  // would race on that read.
+  async function handleImportFromHubspot(payloads) {
+    if (!payloads.length) return;
+    setFormError(null);
+    if (!values.company_name.trim() || !values.contact_name.trim()) {
+      setFormError("Company name and contact name are required.");
+      return;
+    }
+    const actor = await ensureName();
+    if (!actor) return;
+
+    setImporting(true);
+    try {
+      const [first, ...rest] = payloads;
+      const { lead } = await createLead(
+        { ...values, company_scale: values.company_scale || null, first_call: first },
+        actor
+      );
+      for (const payload of rest) {
+        await addCall(lead.id, payload, actor);
+      }
+      onCreated?.(lead);
+      onClose();
+    } catch (err) {
+      if (err.status === 409) {
+        setFormError(`Already being tracked (id: ${err.body?.existing_lead?.id || "unknown"}).`);
+      } else {
+        setFormError(err.message);
+      }
+    } finally {
+      setImporting(false);
+    }
+  }
+
   return (
-    <Modal title={locked ? "Log first call" : "Add lead to Demo Calls"} onClose={onClose} wide>
+    <Modal title={locked ? "Log first meeting" : "Add opportunity to Meetings"} onClose={onClose} wide>
       <form className="form-grid" onSubmit={handleSubmit}>
         <div className="form-row">
           <label>
@@ -87,8 +128,16 @@ export function AddDemoCallLeadModal({ onClose, onCreated, prefill }) {
           </select>
         </label>
 
+        {prefill?.hubspot_contact_id && (
+          <ImportFromHubspotPanel
+            contactId={prefill.hubspot_contact_id}
+            onImport={handleImportFromHubspot}
+            importing={importing}
+          />
+        )}
+
         <h4 style={{ margin: "6px 0 0", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.03em", color: "var(--text-muted)" }}>
-          First call (optional — you can log it later instead)
+          First meeting (optional — you can log it later instead)
         </h4>
         <div className="form-row">
           <label>
@@ -106,7 +155,7 @@ export function AddDemoCallLeadModal({ onClose, onCreated, prefill }) {
         {callValues.outcome && (
           <>
             <label>
-              Call notes
+              Meeting notes
               <textarea value={callValues.notes} onChange={(e) => patchCall({ notes: e.target.value })} />
             </label>
             <label>

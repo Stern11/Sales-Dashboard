@@ -5,18 +5,28 @@
 // stay within Vercel Hobby's 12-serverless-function cap per deployment
 // (every file under api/ is its own function; see api/demo-calls/[id].js
 // for the same reasoning behind its own consolidation).
+// GET /api/demo-calls?action=hubspot-engagements&contact_id=<id> — the one
+// place this module reads HubSpot (read-only): Meetings + Notes logged
+// against a contact, for the "Import from HubSpot" review panel. See
+// lib/demo-calls/hubspotEngagements.js for why Calls are deliberately
+// excluded. Folded in here rather than a new file for the same
+// function-cap reason as above.
 // POST /api/demo-calls — create a lead: manual entry, or the target of
 // "Log first call" on a live-but-untracked HubSpot contact (accepts an
 // optional `first_call` payload to create the lead and its first call log
 // in one request — see createLead() in lib/demo-calls/queries.js).
 //
 // Demo Calls is a database-backed module, same boundary as Sales Pipeline —
-// see db/schema.sql and docs/ARCHITECTURE.md. It never reads HubSpot itself;
-// "who's reached Demo Call" is detected live, client-side, by reusing the
-// same data ABM/Marketing already fetch (src/modules/demo-calls/
-// useLiveDemoCallContacts.js).
+// see db/schema.sql and docs/ARCHITECTURE.md. "Who's reached Demo Call" is
+// still detected live, client-side, by reusing the same data ABM/Marketing
+// already fetch (src/modules/demo-calls/useLiveDemoCallContacts.js) — the
+// hubspot-engagements action above is a narrower, deliberate exception for
+// the import panel only, not a general HubSpot read path for this module.
 
 import { withDbErrorHandling, ValidationError, ConflictError } from "../../lib/demo-calls/respond.js";
+import { withHubspotErrorHandling } from "../../lib/respond.js";
+import { getToken } from "../../lib/hubspot.js";
+import { fetchEngagementsForContact } from "../../lib/demo-calls/hubspotEngagements.js";
 import { listLeads, createLead, getLeadByHubspotContactId, getLeadByPipelineLeadId, listCalls } from "../../lib/demo-calls/queries.js";
 import { isValidOutcome, isValidCompanyScale } from "../../lib/demo-calls/constants.js";
 
@@ -33,7 +43,20 @@ function validateCreateBody(body) {
 
 export default async function handler(req, res) {
   if (req.method === "GET") {
-    const { pipeline_lead_id } = req.query;
+    const { pipeline_lead_id, action, contact_id: contactId } = req.query;
+
+    if (action === "hubspot-engagements") {
+      if (!contactId) {
+        res.status(400).json({ error: "contact_id is required." });
+        return;
+      }
+      await withHubspotErrorHandling(res, async () => {
+        const token = getToken();
+        return fetchEngagementsForContact(token, contactId);
+      });
+      return;
+    }
+
     if (pipeline_lead_id) {
       await withDbErrorHandling(res, async () => {
         const lead = await getLeadByPipelineLeadId(pipeline_lead_id);

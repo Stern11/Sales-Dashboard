@@ -126,7 +126,7 @@ export function DemoCallsPage() {
     setBulkLoading(false);
     setSelectedIds(new Set());
     refresh();
-    setBulkStatus(`Added ${added} lead${added === 1 ? "" : "s"} to the pipeline.${skipped ? ` ${skipped} skipped (already in pipeline).` : ""}`);
+    setBulkStatus(`Added ${added} opportunit${added === 1 ? "y" : "ies"} to the pipeline.${skipped ? ` ${skipped} skipped (already in pipeline).` : ""}`);
   }
 
   return (
@@ -145,12 +145,12 @@ export function DemoCallsPage() {
               />
               <PageMeta lastUpdated={data.generated_at} onRefresh={refresh} />
             </div>
-            <p className="subtitle" style={{ marginBottom: 14 }}>{formatRangeLabel(from, to)} — {summary.total} lead{summary.total === 1 ? "" : "s"}</p>
+            <p className="subtitle" style={{ marginBottom: 14 }}>{formatRangeLabel(from, to)} — {summary.total} opportunit{summary.total === 1 ? "y" : "ies"}</p>
             <KpiRow
               items={[
-                { label: "Total Demo Calls Booked", value: summary.total },
-                { label: "First Call Done", value: summary.call_1_done },
-                { label: "Second Calls Done", value: summary.call_2_done },
+                { label: "Total Meetings Booked", value: summary.total },
+                { label: "First Meeting Done", value: summary.call_1_done },
+                { label: "Second Meeting Done", value: summary.call_2_done },
                 { label: "No Shows", value: summary.no_shows },
                 { label: "Not Relevant", value: summary.irrelevant },
                 { label: "Mid-Market Booked", value: summary.by_scale.mid_market },
@@ -160,19 +160,19 @@ export function DemoCallsPage() {
             <section>
               <h2>Week-on-Week Trend</h2>
               <p className="subtitle" style={{ marginBottom: 10 }}>
-                Each week shows the current state of leads booked that week — how many completed a call, moved to a
-                second, converted to pipeline, or turned out irrelevant.
+                Each week shows the current state of opportunities booked that week — how many completed a meeting,
+                moved to a second, converted to pipeline, or turned out irrelevant.
               </p>
               <WeeklyTrendChart buckets={weeklyTrend} />
             </section>
             <div className="pipeline-toolbar" style={{ justifyContent: "flex-end" }}>
               <div className="pipeline-toolbar-group">
-                <button type="button" className="btn btn-primary" onClick={() => setAddModalOpen(true)}>+ Add Lead</button>
+                <button type="button" className="btn btn-primary" onClick={() => setAddModalOpen(true)}>+ Add Opportunity</button>
               </div>
             </div>
             <section>
               <p className="subtitle" style={{ marginBottom: 10 }}>
-                Check the Pipeline column to select leads, then add them in bulk.
+                Check the Pipeline column to select opportunities, then add them in bulk.
               </p>
               {selectedIds.size > 0 && (
                 <div className="bulk-action-bar">

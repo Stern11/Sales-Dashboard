@@ -6,6 +6,7 @@ import { StatusPill } from "../../components/StatusPill.jsx";
 import { CallLogTimeline } from "./CallLogTimeline.jsx";
 import { MarkIrrelevantModal } from "./MarkIrrelevantModal.jsx";
 import { DeleteDemoCallLeadModal } from "./DeleteDemoCallLeadModal.jsx";
+import { ImportFromHubspotPanel } from "./ImportFromHubspotPanel.jsx";
 import { useDemoCallLead } from "./useDemoCallsData.js";
 import { useDemoCallsMutations } from "./useDemoCallsMutations.js";
 import { usePipelineMutations } from "../pipeline/usePipelineMutations.js";
@@ -20,7 +21,8 @@ export function DemoCallLeadDrawer({ leadId, onClose, onChanged }) {
   const [irrelevantModalOpen, setIrrelevantModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [pipelineStatus, setPipelineStatus] = useState(null);
-  const { updateLead, setStatus, linkPipeline, loading: saving } = useDemoCallsMutations();
+  const [importing, setImporting] = useState(false);
+  const { updateLead, setStatus, linkPipeline, addCall, loading: saving } = useDemoCallsMutations();
   const { createLead: createPipelineLead, loading: addingToPipeline } = usePipelineMutations();
   const { ensureName } = useNameTagContext();
 
@@ -67,6 +69,25 @@ export function DemoCallLeadDrawer({ leadId, onClose, onChanged }) {
     onChanged?.();
   }
 
+  // Sequential, not parallel — addCall assigns call_number from the current
+  // row count, so importing several selected engagements at once would race
+  // on that read (same reasoning as AddDemoCallLeadModal's import handler).
+  async function handleImportFromHubspot(payloads) {
+    if (!payloads.length) return;
+    const actor = await ensureName();
+    if (!actor) return;
+    setImporting(true);
+    try {
+      for (const payload of payloads) {
+        await addCall(leadId, payload, actor);
+      }
+      refresh();
+      onChanged?.();
+    } finally {
+      setImporting(false);
+    }
+  }
+
   async function handleAddToPipeline() {
     setPipelineStatus(null);
     const actor = await ensureName();
@@ -94,7 +115,7 @@ export function DemoCallLeadDrawer({ leadId, onClose, onChanged }) {
   const effStatus = values ? effectiveStatus(values.status, lastCallOutcome) : "active";
 
   return (
-    <Drawer title={values?.company_name || "Demo call lead"} onClose={onClose}>
+    <Drawer title={values?.company_name || "Meeting opportunity"} onClose={onClose}>
       <AsyncState loading={loading && !data} error={error}>
         {values && (
           <>
@@ -107,14 +128,14 @@ export function DemoCallLeadDrawer({ leadId, onClose, onChanged }) {
               )}
             </div>
             {effStatus === "no_show" && (
-              <p className="subtitle" style={{ marginBottom: 14 }}>Last call was a no-show — log a follow-up call to clear this.</p>
+              <p className="subtitle" style={{ marginBottom: 14 }}>Last meeting was a no-show — log a follow-up meeting to clear this.</p>
             )}
             {values.irrelevant_reason && (
               <p className="subtitle" style={{ marginBottom: 14 }}>Reason: {values.irrelevant_reason}</p>
             )}
 
             <div className="lead-detail-section">
-              <h4>Lead details</h4>
+              <h4>Opportunity details</h4>
               <form className="form-grid" onSubmit={handleSave}>
                 <div className="form-row">
                   <label>
@@ -150,8 +171,16 @@ export function DemoCallLeadDrawer({ leadId, onClose, onChanged }) {
               </form>
             </div>
 
+            {values.hubspot_contact_id && (
+              <ImportFromHubspotPanel
+                contactId={values.hubspot_contact_id}
+                onImport={handleImportFromHubspot}
+                importing={importing}
+              />
+            )}
+
             <div className="lead-detail-section lead-detail-section-featured">
-              <h4>Call log</h4>
+              <h4>Meeting log</h4>
               <CallLogTimeline leadId={leadId} calls={data.calls || []} onChanged={refresh} />
             </div>
 
@@ -164,8 +193,8 @@ export function DemoCallLeadDrawer({ leadId, onClose, onChanged }) {
               ) : effStatus !== "active" ? (
                 <p className="subtitle">
                   {effStatus === "no_show"
-                    ? "Can't add to pipeline while the last call is an unresolved no-show — log a follow-up call first."
-                    : "Can't add an irrelevant lead to pipeline."}
+                    ? "Can't add to pipeline while the last meeting is an unresolved no-show — log a follow-up meeting first."
+                    : "Can't add an irrelevant opportunity to pipeline."}
                 </p>
               ) : (
                 <>
@@ -185,7 +214,7 @@ export function DemoCallLeadDrawer({ leadId, onClose, onChanged }) {
 
             <div className="lead-detail-danger-zone">
               <button type="button" className="btn btn-danger" onClick={() => setDeleteModalOpen(true)}>
-                Delete this lead
+                Delete this opportunity
               </button>
             </div>
           </>

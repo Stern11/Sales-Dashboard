@@ -70,12 +70,16 @@ export function formatCallDate(dateStr) {
 export function summarizeLeads(leads) {
   const active = leads.filter((l) => l.status === "active");
   const callCount = (l) => Number(l.call_count) || 0;
+  const completedCount = (l) => Number(l.completed_count) || 0;
   return {
     total: leads.length,
     awaiting_first_call: active.filter((l) => callCount(l) === 0).length,
-    call_1_done: active.filter((l) => callCount(l) >= 1).length,
-    call_2_done: active.filter((l) => callCount(l) >= 2).length,
-    call_3_done: active.filter((l) => callCount(l) >= 3).length,
+    // "Done" means actually completed — a logged no-show still increments
+    // call_count (an attempt was made) but must not count as a meeting done,
+    // so this reads off completed_count instead.
+    call_1_done: active.filter((l) => completedCount(l) >= 1).length,
+    call_2_done: active.filter((l) => completedCount(l) >= 2).length,
+    call_3_done: active.filter((l) => completedCount(l) >= 3).length,
     no_shows: leads.reduce((sum, l) => sum + (Number(l.no_show_count) || 0), 0),
     added_to_pipeline: leads.filter((l) => l.pipeline_lead_id).length,
     irrelevant: leads.filter((l) => l.status === "irrelevant").length,
@@ -109,28 +113,51 @@ function isoDate(date) {
   return date.toISOString().slice(0, 10);
 }
 
-/** One line per series in the weekly funnel trend chart — fixed order/color, reusing this app's existing stage/status tokens rather than a new palette. */
+/**
+ * One bar per series in the weekly funnel trend chart — fixed order/color,
+ * reusing this app's existing stage/status tokens rather than a new palette.
+ * Only 3 of the 5 metrics weeklyFunnelTrend() computes per week are charted
+ * (Booked, Meeting 1 Done, Added to Pipeline) — Meeting 2 Done and Irrelevant
+ * are rarer/secondary and dropping them keeps each week's group of bars
+ * readable. The bucket objects still carry call_2_done/irrelevant either way.
+ */
 export const FUNNEL_TREND_SERIES = [
   { key: "booked", label: "Booked", color: "var(--stage-sql)" },
-  { key: "call_1_done", label: "Call 1 Done", color: "var(--stage-discovery)" },
-  { key: "call_2_done", label: "Call 2 Done", color: "var(--stage-commercial)" },
+  { key: "call_1_done", label: "Meeting 1 Done", color: "var(--stage-discovery)" },
   { key: "added_to_pipeline", label: "Added to Pipeline", color: "var(--stage-won)" },
-  { key: "irrelevant", label: "Irrelevant", color: "var(--stage-lost)" },
 ];
 
 /**
- * Week-on-week cohort breakdown for the last `weeks` Monday-start weeks,
- * computed entirely client-side from the already-fetched `leads` array (no
- * new backend endpoint — same "aggregate what's already in hand" approach
- * ABM's Overall Effort totals use, see docs/ARCHITECTURE.md). Each week
- * bucket is the *current* state of leads booked (created_at) that week —
- * same cohort semantics as the "Booked" date filter above, just plotted
- * across many weeks side by side instead of one filtered snapshot.
+ * Week-on-week cohort breakdown, computed entirely client-side from the
+ * already-fetched `leads` array (no new backend endpoint — same "aggregate
+ * what's already in hand" approach ABM's Overall Effort totals use, see
+ * docs/ARCHITECTURE.md). Each week bucket is the *current* state of leads
+ * booked (created_at) that week — same cohort semantics as the "Booked"
+ * date filter above, just plotted across many weeks side by side instead of
+ * one filtered snapshot.
+ *
+ * The window isn't a fixed trailing range: it starts at the Monday-aligned
+ * week of the very first booked lead (so the chart never opens on a wall of
+ * empty weeks/months before any data exists), grows by one column each week
+ * as time passes, and once it reaches `maxWeeks` it rolls forward — always
+ * dropping the oldest week and keeping the current week as the last column.
  */
-export function weeklyFunnelTrend(leads, weeks = 12) {
+export function weeklyFunnelTrend(leads, maxWeeks = 8) {
   const currentWeekStart = mondayOfUtcWeek(new Date());
+  const bookedWeekStarts = leads
+    .map((l) => l.created_at)
+    .filter(Boolean)
+    .map((iso) => mondayOfUtcWeek(toUtcDate(new Date(iso).toISOString().slice(0, 10))));
+
+  let weeksToShow = 1;
+  if (bookedWeekStarts.length) {
+    const earliestWeekStart = new Date(Math.min(...bookedWeekStarts.map((d) => d.getTime())));
+    const spanWeeks = Math.round((currentWeekStart.getTime() - earliestWeekStart.getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1;
+    weeksToShow = Math.min(maxWeeks, Math.max(1, spanWeeks));
+  }
+
   const buckets = new Map();
-  for (let i = weeks - 1; i >= 0; i--) {
+  for (let i = weeksToShow - 1; i >= 0; i--) {
     const d = new Date(currentWeekStart);
     d.setUTCDate(d.getUTCDate() - i * 7);
     const week_start = isoDate(d);
@@ -147,11 +174,13 @@ export function weeklyFunnelTrend(leads, weeks = 12) {
     // Matches summarizeLeads()'s semantics: call progress is only counted
     // for currently-active leads (irrelevant is its own bucket, a side
     // branch — same "active vs. side-state" split Sales Pipeline uses for
-    // cold/lost) — otherwise the two charts would disagree on "Call 1 Done".
+    // cold/lost) — otherwise the two charts would disagree on "Meeting 1
+    // Done". Uses completed_count, not call_count, so a no-show attempt
+    // never counts as a meeting "done".
     if (l.status === "active") {
-      const callCount = Number(l.call_count) || 0;
-      if (callCount >= 1) bucket.call_1_done += 1;
-      if (callCount >= 2) bucket.call_2_done += 1;
+      const completedCount = Number(l.completed_count) || 0;
+      if (completedCount >= 1) bucket.call_1_done += 1;
+      if (completedCount >= 2) bucket.call_2_done += 1;
     }
     if (l.pipeline_lead_id) bucket.added_to_pipeline += 1;
     if (l.status === "irrelevant") bucket.irrelevant += 1;

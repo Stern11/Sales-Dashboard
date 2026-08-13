@@ -100,11 +100,23 @@ describe("effectiveStatus", () => {
 describe("summarizeLeads", () => {
   it("matches the server's summarize() for the same input — hand-mirrored with no shared source", () => {
     const leads = [
-      { status: "active", call_count: 2, no_show_count: 1, pipeline_lead_id: null, company_scale: "enterprise" },
-      { status: "active", call_count: 0, no_show_count: 0, pipeline_lead_id: "p1", company_scale: "mid_market" },
-      { status: "irrelevant", call_count: 1, no_show_count: 0, pipeline_lead_id: null, company_scale: null },
+      { status: "active", call_count: 2, completed_count: 1, no_show_count: 1, pipeline_lead_id: null, company_scale: "enterprise" },
+      { status: "active", call_count: 0, completed_count: 0, no_show_count: 0, pipeline_lead_id: "p1", company_scale: "mid_market" },
+      { status: "irrelevant", call_count: 1, completed_count: 1, no_show_count: 0, pipeline_lead_id: null, company_scale: null },
     ];
     expect(summarizeLeads(leads)).toEqual(serverSummarize(leads));
+  });
+
+  it("call_1_done/call_2_done read completed_count, not call_count — a no-show attempt isn't 'done'", () => {
+    const leads = [
+      // call_count 1 but nothing completed — a no-show, not a done call.
+      { status: "active", call_count: 1, completed_count: 0, no_show_count: 1, pipeline_lead_id: null, company_scale: null },
+      // call_count 2 (a no-show retried), only the retry completed.
+      { status: "active", call_count: 2, completed_count: 1, no_show_count: 1, pipeline_lead_id: null, company_scale: null },
+    ];
+    const s = summarizeLeads(leads);
+    expect(s.call_1_done).toBe(1);
+    expect(s.call_2_done).toBe(0);
   });
 
   it("counts mid_market and enterprise leads for the KPI card, independent of status", () => {
@@ -130,30 +142,59 @@ describe("COMPANY_SCALE_OPTIONS / scaleLabel", () => {
 });
 
 describe("weeklyFunnelTrend", () => {
-  it("returns exactly `weeks` buckets in chronological order, ending on the current week", () => {
-    const buckets = weeklyFunnelTrend([], 12);
-    expect(buckets).toHaveLength(12);
+  function weeksAgoIso(n) {
+    const d = new Date();
+    d.setUTCDate(d.getUTCDate() - n * 7);
+    return d.toISOString();
+  }
+
+  it("with no leads booked yet, shows a single bucket for just the current week", () => {
+    const buckets = weeklyFunnelTrend([], 8);
+    expect(buckets).toHaveLength(1);
+  });
+
+  it("grows one bucket per week of history instead of a fixed count, always ending on the current week", () => {
+    const buckets = weeklyFunnelTrend(
+      [{ created_at: weeksAgoIso(2), call_count: 0, status: "active", pipeline_lead_id: null }],
+      8
+    );
+    expect(buckets).toHaveLength(3); // 2 weeks ago, 1 week ago, current week
     const starts = buckets.map((b) => b.week_start);
     expect([...starts].sort()).toEqual(starts);
-    const lastMonday = new Date(buckets[11].week_start + "T00:00:00Z");
+    const lastMonday = new Date(buckets[buckets.length - 1].week_start + "T00:00:00Z");
+    const diffDays = (Date.now() - lastMonday.getTime()) / (24 * 60 * 60 * 1000);
+    expect(diffDays).toBeLessThan(7);
+    expect(diffDays).toBeGreaterThanOrEqual(0);
+  });
+
+  it("caps the window at maxWeeks and rolls forward once history exceeds it, still ending on the current week", () => {
+    const buckets = weeklyFunnelTrend(
+      [{ created_at: weeksAgoIso(20), call_count: 0, status: "active", pipeline_lead_id: null }],
+      8
+    );
+    expect(buckets).toHaveLength(8);
+    const lastMonday = new Date(buckets[7].week_start + "T00:00:00Z");
     const diffDays = (Date.now() - lastMonday.getTime()) / (24 * 60 * 60 * 1000);
     expect(diffDays).toBeLessThan(7);
     expect(diffDays).toBeGreaterThanOrEqual(0);
   });
 
   it("counts a lead created now into the current (last) bucket as booked", () => {
-    const buckets = weeklyFunnelTrend([{ created_at: new Date().toISOString(), call_count: 0, status: "active", pipeline_lead_id: null }], 4);
-    expect(buckets[3].booked).toBe(1);
-    expect(buckets[0].booked + buckets[1].booked + buckets[2].booked).toBe(0);
+    const buckets = weeklyFunnelTrend([
+      { created_at: weeksAgoIso(3), call_count: 0, status: "active", pipeline_lead_id: null },
+      { created_at: new Date().toISOString(), call_count: 0, status: "active", pipeline_lead_id: null },
+    ], 8);
+    expect(buckets[buckets.length - 1].booked).toBe(1);
+    expect(buckets.slice(0, -1).reduce((sum, b) => sum + b.booked, 0)).toBe(1);
   });
 
-  it("call_count thresholds feed call_1_done/call_2_done independently, matching summarizeLeads' semantics", () => {
+  it("completed_count thresholds feed call_1_done/call_2_done independently — a logged no-show doesn't count as done", () => {
     const now = new Date().toISOString();
     const [bucket] = weeklyFunnelTrend([
-      { created_at: now, call_count: 0, status: "active", pipeline_lead_id: null },
-      { created_at: now, call_count: 1, status: "active", pipeline_lead_id: null },
-      { created_at: now, call_count: 2, status: "active", pipeline_lead_id: null },
-    ], 1);
+      { created_at: now, call_count: 1, completed_count: 0, status: "active", pipeline_lead_id: null },
+      { created_at: now, call_count: 1, completed_count: 1, status: "active", pipeline_lead_id: null },
+      { created_at: now, call_count: 2, completed_count: 2, status: "active", pipeline_lead_id: null },
+    ], 8);
     expect(bucket.booked).toBe(3);
     expect(bucket.call_1_done).toBe(2);
     expect(bucket.call_2_done).toBe(1);
@@ -162,27 +203,28 @@ describe("weeklyFunnelTrend", () => {
   it("counts pipeline_lead_id and status:irrelevant independently of call progress", () => {
     const now = new Date().toISOString();
     const [bucket] = weeklyFunnelTrend([
-      { created_at: now, call_count: 0, status: "active", pipeline_lead_id: "p1" },
-      { created_at: now, call_count: 0, status: "irrelevant", pipeline_lead_id: null },
-    ], 1);
+      { created_at: now, completed_count: 0, status: "active", pipeline_lead_id: "p1" },
+      { created_at: now, completed_count: 0, status: "irrelevant", pipeline_lead_id: null },
+    ], 8);
     expect(bucket.added_to_pipeline).toBe(1);
     expect(bucket.irrelevant).toBe(1);
   });
 
-  it("excludes irrelevant leads from call_1_done/call_2_done — matches summarizeLeads(), which also only counts active leads toward call progress", () => {
+  it("excludes irrelevant leads from call_1_done/call_2_done — matches summarizeLeads' semantics, which also only counts active leads toward call progress", () => {
     const now = new Date().toISOString();
     const [bucket] = weeklyFunnelTrend([
-      { created_at: now, call_count: 2, status: "irrelevant", pipeline_lead_id: null },
-      { created_at: now, call_count: 1, status: "active", pipeline_lead_id: null },
-    ], 1);
+      { created_at: now, completed_count: 2, status: "irrelevant", pipeline_lead_id: null },
+      { created_at: now, completed_count: 1, status: "active", pipeline_lead_id: null },
+    ], 8);
     expect(bucket.booked).toBe(2);
     expect(bucket.call_1_done).toBe(1);
     expect(bucket.call_2_done).toBe(0);
     expect(bucket.irrelevant).toBe(1);
   });
 
-  it("silently drops leads booked before the visible window instead of throwing", () => {
+  it("silently drops leads booked before the visible window once the window is capped, instead of throwing", () => {
     const buckets = weeklyFunnelTrend([{ created_at: "2000-01-01T00:00:00Z", call_count: 0, status: "active", pipeline_lead_id: null }], 4);
+    expect(buckets).toHaveLength(4);
     expect(buckets.reduce((sum, b) => sum + b.booked, 0)).toBe(0);
   });
 
@@ -192,9 +234,9 @@ describe("weeklyFunnelTrend", () => {
 });
 
 describe("FUNNEL_TREND_SERIES", () => {
-  it("has exactly the 5 expected series in a fixed order", () => {
+  it("has exactly the 3 charted series in a fixed order", () => {
     expect(FUNNEL_TREND_SERIES.map((s) => s.key)).toEqual([
-      "booked", "call_1_done", "call_2_done", "added_to_pipeline", "irrelevant",
+      "booked", "call_1_done", "added_to_pipeline",
     ]);
   });
 });
