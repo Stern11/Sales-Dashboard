@@ -11,7 +11,7 @@ import { WeeklyTrendChart } from "./WeeklyTrendChart.jsx";
 import { useDemoCallsList } from "./useDemoCallsData.js";
 import { useDemoCallsMutations } from "./useDemoCallsMutations.js";
 import { useLiveDemoCallContacts } from "./useLiveDemoCallContacts.js";
-import { summarizeLeads, resolvePeriodRange, isWithinRange, weeklyFunnelTrend } from "./constants.js";
+import { summarizeLeads, resolvePeriodRange, isWithinRange, weeklyFunnelTrend, bookedDateOf } from "./constants.js";
 import { demoCallLeadToPipelinePrefill } from "../../lib/pipelineIntegration.js";
 import { usePipelineMutations } from "../pipeline/usePipelineMutations.js";
 import { useNameTagContext } from "../../context/NameTagContext.jsx";
@@ -61,12 +61,17 @@ export function DemoCallsPage() {
     [liveContacts, trackedHubspotIds]
   );
 
-  // "Booked" = a tracked lead's created_at. The date filter only scopes the
-  // funnel/KPIs and the tracked half of the table — untracked/"virtual" rows
-  // (not booked yet) always show regardless of the selected period.
+  // "Booked" = bookedDateOf() (the first logged call's date, falling back to
+  // created_at only if no call's been logged yet — see constants.js). Not
+  // created_at alone: a lead imported/backfilled long after its real meeting
+  // happened would otherwise show as "booked" the week it was entered into
+  // this dashboard, not the week the meeting actually took place. The date
+  // filter only scopes the funnel/KPIs and the tracked half of the table —
+  // untracked/"virtual" rows (not booked yet) always show regardless of the
+  // selected period.
   const { from, to } = useMemo(() => resolvePeriodRange(period, customFrom, customTo), [period, customFrom, customTo]);
   const bookedLeads = useMemo(
-    () => (from || to ? leads.filter((l) => isWithinRange(l.created_at, from, to)) : leads),
+    () => (from || to ? leads.filter((l) => isWithinRange(bookedDateOf(l), from, to)) : leads),
     [leads, from, to]
   );
 

@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   BOOKED_PERIOD_OPTIONS, resolvePeriodRange, isWithinRange,
   OUTCOME_OPTIONS, outcomeMeta, STATUS_OPTIONS, statusMeta, effectiveStatus, summarizeLeads,
-  FUNNEL_TREND_SERIES, weeklyFunnelTrend,
+  FUNNEL_TREND_SERIES, weeklyFunnelTrend, bookedDateOf, MIN_TREND_WEEK_START,
   COMPANY_SCALE_OPTIONS, scaleLabel,
 } from "../../../../src/modules/demo-calls/constants.js";
 import { summarize as serverSummarize } from "../../../../lib/demo-calls/queries.js";
@@ -141,6 +141,17 @@ describe("COMPANY_SCALE_OPTIONS / scaleLabel", () => {
   });
 });
 
+describe("bookedDateOf", () => {
+  it("prefers first_call_date over created_at when a call's been logged", () => {
+    const lead = { first_call_date: "2026-03-18", created_at: "2026-08-09T06:22:10.546Z" };
+    expect(bookedDateOf(lead)).toBe("2026-03-18T00:00:00");
+  });
+  it("falls back to created_at when no call's been logged yet", () => {
+    const lead = { first_call_date: null, created_at: "2026-08-09T06:22:10.546Z" };
+    expect(bookedDateOf(lead)).toBe("2026-08-09T06:22:10.546Z");
+  });
+});
+
 describe("weeklyFunnelTrend", () => {
   function weeksAgoIso(n) {
     const d = new Date();
@@ -148,15 +159,34 @@ describe("weeklyFunnelTrend", () => {
     return d.toISOString();
   }
 
+  // These tests probe the underlying grow/cap/roll logic on its own, so they
+  // pass a floor far in the past (rather than the real MIN_TREND_WEEK_START
+  // default) — otherwise, once "now" is close enough to that temporary
+  // business-specific floor, it would start clamping these fixtures' dates
+  // and the tests would stop testing what they say they test. See the
+  // dedicated MIN_TREND_WEEK_START tests below for the floor itself.
+  const NO_FLOOR = "2000-01-01";
+
+  it("buckets a backfilled lead by its first_call_date, not the created_at row-insert time — the bug this was built to fix: a lead imported long after its real meeting would otherwise pile into whatever week it was entered", () => {
+    const buckets = weeklyFunnelTrend([
+      // Inserted into the DB "now" (e.g. a bulk import), but the real
+      // meeting was 5 weeks ago per the call log.
+      { created_at: new Date().toISOString(), first_call_date: weeksAgoIso(5).slice(0, 10), call_count: 1, status: "active", pipeline_lead_id: null },
+    ], 8, NO_FLOOR);
+    expect(buckets).toHaveLength(6); // 5 weeks ago through the current week
+    expect(buckets[0].booked).toBe(1);
+    expect(buckets.slice(1).reduce((sum, b) => sum + b.booked, 0)).toBe(0);
+  });
+
   it("with no leads booked yet, shows a single bucket for just the current week", () => {
-    const buckets = weeklyFunnelTrend([], 8);
+    const buckets = weeklyFunnelTrend([], 8, NO_FLOOR);
     expect(buckets).toHaveLength(1);
   });
 
   it("grows one bucket per week of history instead of a fixed count, always ending on the current week", () => {
     const buckets = weeklyFunnelTrend(
       [{ created_at: weeksAgoIso(2), call_count: 0, status: "active", pipeline_lead_id: null }],
-      8
+      8, NO_FLOOR
     );
     expect(buckets).toHaveLength(3); // 2 weeks ago, 1 week ago, current week
     const starts = buckets.map((b) => b.week_start);
@@ -170,7 +200,7 @@ describe("weeklyFunnelTrend", () => {
   it("caps the window at maxWeeks and rolls forward once history exceeds it, still ending on the current week", () => {
     const buckets = weeklyFunnelTrend(
       [{ created_at: weeksAgoIso(20), call_count: 0, status: "active", pipeline_lead_id: null }],
-      8
+      8, NO_FLOOR
     );
     expect(buckets).toHaveLength(8);
     const lastMonday = new Date(buckets[7].week_start + "T00:00:00Z");
@@ -183,9 +213,31 @@ describe("weeklyFunnelTrend", () => {
     const buckets = weeklyFunnelTrend([
       { created_at: weeksAgoIso(3), call_count: 0, status: "active", pipeline_lead_id: null },
       { created_at: new Date().toISOString(), call_count: 0, status: "active", pipeline_lead_id: null },
-    ], 8);
+    ], 8, NO_FLOOR);
     expect(buckets[buckets.length - 1].booked).toBe(1);
     expect(buckets.slice(0, -1).reduce((sum, b) => sum + b.booked, 0)).toBe(1);
+  });
+
+  describe("MIN_TREND_WEEK_START floor (default, no override)", () => {
+    it("never starts before the floor even when a lead is booked much earlier", () => {
+      const buckets = weeklyFunnelTrend(
+        [{ created_at: "2000-01-01T00:00:00Z", call_count: 0, status: "active", pipeline_lead_id: null }],
+        8
+      );
+      expect(buckets[0].week_start).toBe(MIN_TREND_WEEK_START);
+      // The 2000-01-01 lead itself still falls outside the (floored) window and is dropped.
+      expect(buckets.reduce((sum, b) => sum + b.booked, 0)).toBe(0);
+    });
+
+    it("starts at a real recent lead's own week when that's later than the floor", () => {
+      const buckets = weeklyFunnelTrend(
+        [{ created_at: new Date().toISOString(), call_count: 0, status: "active", pipeline_lead_id: null }],
+        8
+      );
+      const floorTime = new Date(MIN_TREND_WEEK_START + "T00:00:00Z").getTime();
+      const firstBucketTime = new Date(buckets[0].week_start + "T00:00:00Z").getTime();
+      expect(firstBucketTime).toBeGreaterThanOrEqual(floorTime);
+    });
   });
 
   it("completed_count thresholds feed call_1_done/call_2_done independently — a logged no-show doesn't count as done", () => {
@@ -223,7 +275,7 @@ describe("weeklyFunnelTrend", () => {
   });
 
   it("silently drops leads booked before the visible window once the window is capped, instead of throwing", () => {
-    const buckets = weeklyFunnelTrend([{ created_at: "2000-01-01T00:00:00Z", call_count: 0, status: "active", pipeline_lead_id: null }], 4);
+    const buckets = weeklyFunnelTrend([{ created_at: "2000-01-01T00:00:00Z", call_count: 0, status: "active", pipeline_lead_id: null }], 4, NO_FLOOR);
     expect(buckets).toHaveLength(4);
     expect(buckets.reduce((sum, b) => sum + b.booked, 0)).toBe(0);
   });

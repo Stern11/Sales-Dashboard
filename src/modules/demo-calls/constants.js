@@ -66,6 +66,21 @@ export function formatCallDate(dateStr) {
   return new Date(`${dateStr}T00:00:00`).toLocaleDateString(undefined, { weekday: "short", month: "long", day: "numeric", year: "numeric" });
 }
 
+/**
+ * The date a lead's meeting was actually booked for — the real source of
+ * truth is the call log entry a rep enters (first_call_date, the call_date
+ * of call #1), not demo_call_leads.created_at. created_at is only a
+ * fallback for a lead with no call logged yet: it's when the tracking row
+ * itself was inserted, which for a historically backfilled/imported lead
+ * can land on a completely different (much more recent) week than when the
+ * meeting actually happened — bucketing or filtering on created_at alone
+ * would pile up old, imported leads into whatever week they happened to be
+ * entered, rather than the week they were really booked for.
+ */
+export function bookedDateOf(lead) {
+  return lead.first_call_date ? `${lead.first_call_date}T00:00:00` : lead.created_at;
+}
+
 /** Mirrors summarize() in lib/demo-calls/queries.js — recomputed client-side for whatever filter is currently applied. */
 export function summarizeLeads(leads) {
   const active = leads.filter((l) => l.status === "active");
@@ -127,31 +142,45 @@ export const FUNNEL_TREND_SERIES = [
   { key: "added_to_pipeline", label: "Added to Pipeline", color: "var(--stage-won)" },
 ];
 
+// Temporary floor on the trend window's earliest possible week — some
+// existing leads carry old/backdated booked dates (data-entry artifacts from
+// before this module's real usage) that would otherwise drag the window back
+// into months with no meaningful activity. Remove once that old data is
+// cleaned up or the window naturally grows past it on its own. Exposed as a
+// weeklyFunnelTrend() parameter (not hardcoded inline) so tests can exercise
+// the underlying grow/cap/roll logic on its own, independent of this
+// temporary business-specific date.
+export const MIN_TREND_WEEK_START = "2026-08-03";
+
 /**
  * Week-on-week cohort breakdown, computed entirely client-side from the
  * already-fetched `leads` array (no new backend endpoint — same "aggregate
  * what's already in hand" approach ABM's Overall Effort totals use, see
  * docs/ARCHITECTURE.md). Each week bucket is the *current* state of leads
- * booked (created_at) that week — same cohort semantics as the "Booked"
- * date filter above, just plotted across many weeks side by side instead of
- * one filtered snapshot.
+ * booked (bookedDateOf() above) that week — same cohort semantics as the
+ * "Booked" date filter above, just plotted across many weeks side by side
+ * instead of one filtered snapshot.
  *
  * The window isn't a fixed trailing range: it starts at the Monday-aligned
- * week of the very first booked lead (so the chart never opens on a wall of
- * empty weeks/months before any data exists), grows by one column each week
- * as time passes, and once it reaches `maxWeeks` it rolls forward — always
- * dropping the oldest week and keeping the current week as the last column.
+ * week of the very first booked lead (never earlier than `floorWeekStartIso`
+ * — see MIN_TREND_WEEK_START above — so the chart never opens on a wall of
+ * empty weeks/months before any real data exists), grows by one column each
+ * week as time passes, and once it reaches `maxWeeks` it rolls forward —
+ * always dropping the oldest week and keeping the current week as the last
+ * column.
  */
-export function weeklyFunnelTrend(leads, maxWeeks = 8) {
+export function weeklyFunnelTrend(leads, maxWeeks = 8, floorWeekStartIso = MIN_TREND_WEEK_START) {
   const currentWeekStart = mondayOfUtcWeek(new Date());
+  const floorWeekStart = toUtcDate(floorWeekStartIso);
   const bookedWeekStarts = leads
-    .map((l) => l.created_at)
+    .map(bookedDateOf)
     .filter(Boolean)
     .map((iso) => mondayOfUtcWeek(toUtcDate(new Date(iso).toISOString().slice(0, 10))));
 
   let weeksToShow = 1;
   if (bookedWeekStarts.length) {
-    const earliestWeekStart = new Date(Math.min(...bookedWeekStarts.map((d) => d.getTime())));
+    const rawEarliestWeekStart = new Date(Math.min(...bookedWeekStarts.map((d) => d.getTime())));
+    const earliestWeekStart = rawEarliestWeekStart.getTime() > floorWeekStart.getTime() ? rawEarliestWeekStart : floorWeekStart;
     const spanWeeks = Math.round((currentWeekStart.getTime() - earliestWeekStart.getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1;
     weeksToShow = Math.min(maxWeeks, Math.max(1, spanWeeks));
   }
@@ -165,8 +194,9 @@ export function weeklyFunnelTrend(leads, maxWeeks = 8) {
   }
 
   for (const l of leads) {
-    if (!l.created_at) continue;
-    const dayStr = new Date(l.created_at).toISOString().slice(0, 10);
+    const bookedDate = bookedDateOf(l);
+    if (!bookedDate) continue;
+    const dayStr = new Date(bookedDate).toISOString().slice(0, 10);
     const key = isoDate(mondayOfUtcWeek(toUtcDate(dayStr)));
     const bucket = buckets.get(key);
     if (!bucket) continue; // booked before the visible window
@@ -219,7 +249,7 @@ export function resolvePeriodRange(period, customFrom, customTo) {
   return { from: null, to: null };
 }
 
-/** Inclusive bounds check used to filter leads by created_at against a resolved range. */
+/** Inclusive bounds check used to filter leads by a date/timestamp string (e.g. bookedDateOf()) against a resolved range. */
 export function isWithinRange(isoString, from, to) {
   if (!isoString) return false;
   const t = new Date(isoString).getTime();

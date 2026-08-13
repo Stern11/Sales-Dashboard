@@ -14,6 +14,10 @@ const PAD_BOTTOM = 30;
 const GROUP_PADDING_RATIO = 0.18;
 // Gap between the bars within a single week's group.
 const BAR_GAP = 2;
+// Bars stay this slim even when only 1-2 weeks are visible and their slots
+// are wide — otherwise a bar sized to fill its whole slot turns into a bulky
+// block that dominates the chart instead of reading as a small multiple.
+const MAX_BAR_WIDTH = 18;
 
 function monthOf(weekStartIso) {
   return new Date(`${weekStartIso}T00:00:00Z`).getUTCMonth();
@@ -33,14 +37,12 @@ function monthLabel(weekStartIso) {
  *
  * Every week gets its own gridline so week boundaries are never implied —
  * they're drawn — and a slice of each slot is left empty between groups so
- * adjacent weeks never visually merge. Weeks are numbered sequentially (W1 =
- * the first column of whatever window is currently visible, see
- * weeklyFunnelTrend()'s rolling window) rather than resetting per calendar
- * month, since the window itself is capped at a handful of weeks. A bucket
- * that starts a new calendar month still gets a bolder, dashed divider plus
- * the month name above the plot, so "where does the month change" is
- * answered by the chart itself. Hand-built SVG — the app has no charting
- * library.
+ * adjacent weeks never visually merge. Weeks are numbered by position within
+ * their own calendar month (W1, W2, ... resetting to 1 at every month
+ * boundary — so "W3" always means "August's 3rd week", not "the 3rd column
+ * of whatever window happens to be visible"), and a bucket that starts a new
+ * calendar month gets a bolder, dashed divider plus the month name above the
+ * plot. Hand-built SVG — the app has no charting library.
  */
 export function WeeklyTrendChart({ buckets }) {
   const [hoverIdx, setHoverIdx] = useState(null);
@@ -59,8 +61,14 @@ export function WeeklyTrendChart({ buckets }) {
   const xFor = (i) => PAD_LEFT + (i + 0.5) * slotW;
   const yFor = (v) => PAD_TOP + plotH - (v / maxValue) * plotH;
   const baselineY = yFor(0);
-  const groupW = slotW * (1 - GROUP_PADDING_RATIO);
-  const barW = (groupW - BAR_GAP * (FUNNEL_TREND_SERIES.length - 1)) / FUNNEL_TREND_SERIES.length;
+  // Bar width is capped, not just proportional to the slot — otherwise wide
+  // slots (few weeks visible) produce bulky bars. groupW is then derived
+  // from the actual (possibly capped) bar width, so the cluster stays
+  // tightly centered in its slot rather than stretched to fill it.
+  const idealGroupW = slotW * (1 - GROUP_PADDING_RATIO);
+  const idealBarW = (idealGroupW - BAR_GAP * (FUNNEL_TREND_SERIES.length - 1)) / FUNNEL_TREND_SERIES.length;
+  const barW = Math.min(idealBarW, MAX_BAR_WIDTH);
+  const groupW = barW * FUNNEL_TREND_SERIES.length + BAR_GAP * (FUNNEL_TREND_SERIES.length - 1);
 
   // Capped at maxValue so a small range (e.g. max=2) never rounds two ticks
   // to the same integer — dedupe as a second guard against the same thing.
@@ -70,6 +78,15 @@ export function WeeklyTrendChart({ buckets }) {
   const monthStarts = buckets
     .map((b, i) => ({ i, isStart: i === 0 || monthOf(b.week_start) !== monthOf(buckets[i - 1].week_start) }))
     .filter((m) => m.isStart);
+
+  // Position within its month (W1, W2, ...) — resets to 1 at every month
+  // boundary computed above, rather than counting sequentially across the
+  // whole visible window.
+  const weekInMonth = [];
+  for (let i = 0; i < buckets.length; i++) {
+    const isMonthStart = i === 0 || monthOf(buckets[i].week_start) !== monthOf(buckets[i - 1].week_start);
+    weekInMonth.push(isMonthStart ? 1 : weekInMonth[i - 1] + 1);
+  }
 
   function handleMove(e, i) {
     setHoverIdx(i);
@@ -179,7 +196,7 @@ export function WeeklyTrendChart({ buckets }) {
                 );
               })}
               <text x={xFor(i)} y={HEIGHT - 10} textAnchor="middle" fontSize="10" fill="var(--text-muted)" pointerEvents="none">
-                W{i + 1}
+                W{weekInMonth[i]}
               </text>
             </g>
           );
@@ -193,7 +210,7 @@ export function WeeklyTrendChart({ buckets }) {
             top: Math.max(tooltipPos.y - 10, 4),
           }}
         >
-          <div className="trend-tooltip-title">W{hoverIdx + 1} · {monthLabel(buckets[hoverIdx].week_start)}</div>
+          <div className="trend-tooltip-title">W{weekInMonth[hoverIdx]} · {monthLabel(buckets[hoverIdx].week_start)}</div>
           {FUNNEL_TREND_SERIES.map((s) => (
             <div className="trend-tooltip-row" key={s.key}>
               <span className="trend-tooltip-key" style={{ background: s.color }} />
