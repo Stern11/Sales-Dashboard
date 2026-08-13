@@ -3,7 +3,7 @@ import { Modal } from "../../components/Modal.jsx";
 import { useDemoCallsMutations } from "./useDemoCallsMutations.js";
 import { useNameTagContext } from "../../context/NameTagContext.jsx";
 import { ImportFromHubspotPanel } from "./ImportFromHubspotPanel.jsx";
-import { OUTCOME_OPTIONS, COMPANY_SCALE_OPTIONS } from "./constants.js";
+import { outcomeOptionsFor, COMPANY_SCALE_OPTIONS } from "./constants.js";
 
 const EMPTY = { company_name: "", contact_name: "", email: "", phone: "", company_scale: "" };
 const NOT_LOGGED = "";
@@ -29,7 +29,18 @@ export function AddDemoCallLeadModal({ onClose, onCreated, prefill }) {
     setValues((v) => ({ ...v, ...update }));
   }
   function patchCall(update) {
-    setCallValues((v) => ({ ...v, ...update }));
+    setCallValues((v) => {
+      const next = { ...v, ...update };
+      // A future call_date can only be "Scheduled"; any other date can't be
+      // — switching the date can silently invalidate an already-picked
+      // outcome. NOT_LOGGED ("— not logged yet —") is always left alone,
+      // it's not one of outcomeOptionsFor()'s real outcome values.
+      if ("call_date" in update && next.outcome) {
+        const allowed = outcomeOptionsFor(next.call_date);
+        if (!allowed.some((o) => o.value === next.outcome)) next.outcome = allowed[0].value;
+      }
+      return next;
+    });
   }
 
   async function handleSubmit(e) {
@@ -148,7 +159,7 @@ export function AddDemoCallLeadModal({ onClose, onCreated, prefill }) {
             Outcome
             <select value={callValues.outcome} onChange={(e) => patchCall({ outcome: e.target.value })}>
               <option value={NOT_LOGGED}>— not logged yet —</option>
-              {OUTCOME_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              {outcomeOptionsFor(callValues.call_date).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </label>
         </div>

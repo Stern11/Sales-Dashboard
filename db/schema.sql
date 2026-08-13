@@ -111,7 +111,7 @@ create table demo_call_logs (
   lead_id        uuid not null references demo_call_leads(id) on delete cascade,
   call_number    integer not null,
   call_date      date,
-  outcome        text not null check (outcome in ('completed','no_show')),
+  outcome        text not null check (outcome in ('completed','no_show','scheduled')),
   notes          text,
   next_steps     text,
   transcript_url text,
@@ -133,3 +133,4 @@ create index demo_call_logs_lead_id_idx on demo_call_logs (lead_id, call_number)
 --   0006 (2026-08-09): demo_call_leads.pipeline_lead_id FK set to ON DELETE SET NULL
 --   0007 (2026-08-09): added demo_call_leads_pipeline_lead_id_idx
 --   0008 (2026-08-10): added demo_call_leads.company_scale
+--   0009 (2026-08-13): added 'scheduled' to demo_call_logs.outcome

@@ -2,15 +2,32 @@ import { useState } from "react";
 import { StatusPill } from "../../components/StatusPill.jsx";
 import { useDemoCallsMutations } from "./useDemoCallsMutations.js";
 import { useNameTagContext } from "../../context/NameTagContext.jsx";
-import { OUTCOME_OPTIONS, outcomeMeta, relativeTime, formatCallDate } from "./constants.js";
+import { outcomeMeta, outcomeOptionsFor, relativeTime, formatCallDate } from "./constants.js";
 
 const EMPTY_CALL_FORM = { call_date: "", outcome: "completed", notes: "", next_steps: "", transcript_url: "" };
 
 function CallForm({ initial, onCancel, onSubmit, loading, submitLabel }) {
-  const [values, setValues] = useState(initial);
+  // Pre-correct on mount too, not just on date changes below — editing an
+  // existing call that was "Scheduled" for a date that's since arrived
+  // shouldn't leave the select showing a now-invalid value.
+  const [values, setValues] = useState(() => {
+    const allowed = outcomeOptionsFor(initial.call_date);
+    return allowed.some((o) => o.value === initial.outcome) ? initial : { ...initial, outcome: allowed[0].value };
+  });
   function patch(update) {
-    setValues((v) => ({ ...v, ...update }));
+    setValues((v) => {
+      const next = { ...v, ...update };
+      // A future call_date can only be "Scheduled"; any other date can't be
+      // — switching the date can silently invalidate whatever outcome was
+      // already picked, so re-pin it to the first still-valid choice.
+      if ("call_date" in update) {
+        const allowed = outcomeOptionsFor(next.call_date);
+        if (!allowed.some((o) => o.value === next.outcome)) next.outcome = allowed[0].value;
+      }
+      return next;
+    });
   }
+  const outcomeOptions = outcomeOptionsFor(values.call_date);
   return (
     <form
       className="form-grid"
@@ -27,7 +44,7 @@ function CallForm({ initial, onCancel, onSubmit, loading, submitLabel }) {
         <label>
           Outcome
           <select value={values.outcome} onChange={(e) => patch({ outcome: e.target.value })}>
-            {OUTCOME_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            {outcomeOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         </label>
       </div>

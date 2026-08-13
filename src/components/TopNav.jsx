@@ -34,10 +34,20 @@ export function TopNav() {
   );
 }
 
-/** Per-page "Updated: … / Refresh now" strip — each module owns its own data, so its own freshness meta. */
-export function PageMeta({ lastUpdated, onRefresh }) {
+/**
+ * Per-page "Updated: … / Refresh now" strip — each module owns its own
+ * data, so its own freshness meta. Always right-aligned, so the button
+ * lands in the same spot (top-right) on every module regardless of whether
+ * a given page happens to pair it with another toolbar control (a period
+ * toggle, a section heading) or renders it standalone — the flex alignment
+ * lives here rather than depending on each page's own wrapper. `style` lets
+ * a caller that's nesting this inside its own flex row (e.g. beside an
+ * `<h2>`) override the default marginBottom so it doesn't throw off that
+ * row's own vertical centering.
+ */
+export function PageMeta({ lastUpdated, onRefresh, style }) {
   return (
-    <div className="meta" style={{ textAlign: "left", marginBottom: 18 }}>
+    <div className="meta" style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 12, marginBottom: 18, ...style }}>
       {lastUpdated && (
         <span>
           Updated: {new Date(lastUpdated).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}

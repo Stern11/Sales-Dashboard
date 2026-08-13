@@ -1,8 +1,21 @@
 import { describe, it, expect } from "vitest";
 import { summarize } from "../../../lib/demo-calls/queries.js";
 
-function lead({ status = "active", call_count = 0, completed_count = call_count, no_show_count = 0, pipeline_lead_id = null, company_scale = null } = {}) {
-  return { status, call_count, completed_count, no_show_count, pipeline_lead_id, company_scale };
+// `outcomes` is the ordered list of each logged call's outcome (call #1
+// first) — call_count/completed_count and first/second/third_call_outcome
+// are all derived from it, same as the real lateral join in queries.js.
+function lead({ status = "active", outcomes = [], no_show_count = 0, pipeline_lead_id = null, company_scale = null } = {}) {
+  return {
+    status,
+    call_count: outcomes.length,
+    completed_count: outcomes.filter((o) => o === "completed").length,
+    no_show_count,
+    first_call_outcome: outcomes[0] ?? null,
+    second_call_outcome: outcomes[1] ?? null,
+    third_call_outcome: outcomes[2] ?? null,
+    pipeline_lead_id,
+    company_scale,
+  };
 }
 
 describe("summarize", () => {
@@ -25,8 +38,12 @@ describe("summarize", () => {
     expect(s.by_scale).toEqual({ startup: 0, smb: 0, mid_market: 1, enterprise: 2, unspecified: 1 });
   });
 
-  it("counts leads awaiting their first call vs. leads with calls logged", () => {
-    const s = summarize([lead({ call_count: 0 }), lead({ call_count: 1 }), lead({ call_count: 3 })]);
+  it("counts leads awaiting their first call vs. leads with calls completed at each position", () => {
+    const s = summarize([
+      lead({ outcomes: [] }),
+      lead({ outcomes: ["completed"] }),
+      lead({ outcomes: ["completed", "completed", "completed"] }),
+    ]);
     expect(s.total).toBe(3);
     expect(s.awaiting_first_call).toBe(1);
     expect(s.call_1_done).toBe(2);
@@ -34,10 +51,16 @@ describe("summarize", () => {
     expect(s.call_3_done).toBe(1);
   });
 
+  it("call_1_done means call #1 itself was completed — a no-show on call 1 followed by a completed call 2 counts toward call_2_done, never call_1_done", () => {
+    const s = summarize([lead({ outcomes: ["no_show", "completed"] })]);
+    expect(s.call_1_done).toBe(0);
+    expect(s.call_2_done).toBe(1);
+  });
+
   it("excludes irrelevant leads from the active-funnel counts but still counts them in total/irrelevant", () => {
     const s = summarize([
-      lead({ status: "active", call_count: 2 }),
-      lead({ status: "irrelevant", call_count: 2 }),
+      lead({ status: "active", outcomes: ["completed", "completed"] }),
+      lead({ status: "irrelevant", outcomes: ["completed", "completed"] }),
     ]);
     expect(s.total).toBe(2);
     expect(s.call_2_done).toBe(1);
@@ -54,8 +77,8 @@ describe("summarize", () => {
     expect(s.added_to_pipeline).toBe(1);
   });
 
-  it("treats string-typed aggregate counts (as Neon returns) correctly, not as NaN", () => {
-    const s = summarize([lead({ call_count: "2", no_show_count: "1" })]);
+  it("treats a string-typed no_show_count (as Neon returns) correctly, not as NaN", () => {
+    const s = summarize([lead({ outcomes: ["completed", "completed"], no_show_count: "1" })]);
     expect(s.call_2_done).toBe(1);
     expect(s.no_shows).toBe(1);
   });

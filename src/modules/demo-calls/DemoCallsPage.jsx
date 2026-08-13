@@ -24,6 +24,20 @@ function formatRangeLabel(from, to) {
   return `Booked through ${fmt(to)}`;
 }
 
+// One entry per clickable KPI card (Total Meetings Booked has no entry —
+// it's the unfiltered baseline, so there's nothing narrower for it to
+// filter to). Each `test` mirrors the exact predicate summarizeLeads() uses
+// to produce that card's number, so "3" on the card and "3 rows" in the
+// table underneath always agree.
+const KPI_FILTERS = {
+  call_1_done: { label: "First Meeting Done", test: (l) => l.status === "active" && l.first_call_outcome === "completed" },
+  call_2_done: { label: "Second Meeting Done", test: (l) => l.status === "active" && l.second_call_outcome === "completed" },
+  no_shows: { label: "No Shows", test: (l) => (Number(l.no_show_count) || 0) >= 1 },
+  irrelevant: { label: "Not Relevant", test: (l) => l.status === "irrelevant" },
+  mid_market: { label: "Mid-Market Booked", test: (l) => l.company_scale === "mid_market" },
+  enterprise: { label: "Enterprise Booked", test: (l) => l.company_scale === "enterprise" },
+};
+
 export function DemoCallsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedLeadId, setSelectedLeadId] = useState(() => searchParams.get("lead"));
@@ -40,11 +54,18 @@ export function DemoCallsPage() {
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
   const [bulkStatus, setBulkStatus] = useState(null);
+  const [kpiFilter, setKpiFilter] = useState(null);
 
   // A period switch changes which leads are even visible — drop any
   // selection made under the old filter rather than silently bulk-adding
-  // leads the user can no longer see.
-  useEffect(() => { setSelectedIds(new Set()); setBulkStatus(null); }, [period, customFrom, customTo]);
+  // leads the user can no longer see. Same for a KPI-card filter: it's a
+  // sub-filter of "Booked" leads, so it no longer means the same thing once
+  // the period underneath it moves.
+  useEffect(() => { setSelectedIds(new Set()); setBulkStatus(null); setKpiFilter(null); }, [period, customFrom, customTo]);
+
+  function toggleKpiFilter(key) {
+    setKpiFilter((prev) => (prev === key ? null : key));
+  }
 
   function selectLead(id) {
     setSelectedLeadId(id);
@@ -75,10 +96,17 @@ export function DemoCallsPage() {
     [leads, from, to]
   );
 
-  const rows = useMemo(() => [
-    ...bookedLeads.map((l) => ({ ...l, _kind: "tracked" })),
-    ...untrackedContacts.map((c) => ({ ...c, id: `live-${c.contact_id}`, _kind: "virtual" })),
-  ], [bookedLeads, untrackedContacts]);
+  // A KPI card's filter narrows to a specific tracked-lead state (e.g. "had
+  // a no-show") — a live-but-untracked HubSpot contact hasn't reached any of
+  // those states yet, so virtual rows are hidden while a KPI filter is
+  // active rather than left showing alongside a now-unrelated subset.
+  const rows = useMemo(() => {
+    if (kpiFilter) return bookedLeads.filter(KPI_FILTERS[kpiFilter].test).map((l) => ({ ...l, _kind: "tracked" }));
+    return [
+      ...bookedLeads.map((l) => ({ ...l, _kind: "tracked" })),
+      ...untrackedContacts.map((c) => ({ ...c, id: `live-${c.contact_id}`, _kind: "virtual" })),
+    ];
+  }, [bookedLeads, untrackedContacts, kpiFilter]);
 
   const summary = useMemo(() => summarizeLeads(bookedLeads), [bookedLeads]);
   // Its own time dimension already — always the full, unfiltered lead history,
@@ -154,22 +182,32 @@ export function DemoCallsPage() {
             <KpiRow
               items={[
                 { label: "Total Meetings Booked", value: summary.total },
-                { label: "First Meeting Done", value: summary.call_1_done },
-                { label: "Second Meeting Done", value: summary.call_2_done },
-                { label: "No Shows", value: summary.no_shows },
-                { label: "Not Relevant", value: summary.irrelevant },
-                { label: "Mid-Market Booked", value: summary.by_scale.mid_market },
-                { label: "Enterprise Booked", value: summary.by_scale.enterprise },
+                {
+                  label: "First Meeting Done", value: summary.call_1_done,
+                  onClick: () => toggleKpiFilter("call_1_done"), active: kpiFilter === "call_1_done",
+                },
+                {
+                  label: "Second Meeting Done", value: summary.call_2_done,
+                  onClick: () => toggleKpiFilter("call_2_done"), active: kpiFilter === "call_2_done",
+                },
+                {
+                  label: "No Shows", value: summary.no_shows,
+                  onClick: () => toggleKpiFilter("no_shows"), active: kpiFilter === "no_shows",
+                },
+                {
+                  label: "Not Relevant", value: summary.irrelevant,
+                  onClick: () => toggleKpiFilter("irrelevant"), active: kpiFilter === "irrelevant",
+                },
+                {
+                  label: "Mid-Market Booked", value: summary.by_scale.mid_market,
+                  onClick: () => toggleKpiFilter("mid_market"), active: kpiFilter === "mid_market",
+                },
+                {
+                  label: "Enterprise Booked", value: summary.by_scale.enterprise,
+                  onClick: () => toggleKpiFilter("enterprise"), active: kpiFilter === "enterprise",
+                },
               ]}
             />
-            <section>
-              <h2>Week-on-Week Trend</h2>
-              <p className="subtitle" style={{ marginBottom: 10 }}>
-                Each week shows the current state of opportunities booked that week — how many completed a meeting,
-                moved to a second, converted to pipeline, or turned out irrelevant.
-              </p>
-              <WeeklyTrendChart buckets={weeklyTrend} />
-            </section>
             <div className="pipeline-toolbar" style={{ justifyContent: "flex-end" }}>
               <div className="pipeline-toolbar-group">
                 <button type="button" className="btn btn-primary" onClick={() => setAddModalOpen(true)}>+ Add Opportunity</button>
@@ -177,7 +215,14 @@ export function DemoCallsPage() {
             </div>
             <section>
               <p className="subtitle" style={{ marginBottom: 10 }}>
-                Check the Pipeline column to select opportunities, then add them in bulk.
+                {kpiFilter ? (
+                  <>
+                    Filtered to <strong>{KPI_FILTERS[kpiFilter].label}</strong> ({rows.length}) —{" "}
+                    <button type="button" className="link-btn" onClick={() => setKpiFilter(null)}>Clear filter</button>
+                  </>
+                ) : (
+                  "Check the Pipeline column to select opportunities, then add them in bulk."
+                )}
               </p>
               {selectedIds.size > 0 && (
                 <div className="bulk-action-bar">
@@ -196,6 +241,16 @@ export function DemoCallsPage() {
                 selectedIds={selectedIds}
                 onToggleSelect={toggleSelect}
               />
+            </section>
+            {/* Secondary — the table above is the primary view; this is here for
+                whoever scrolls down for it, not competing for first attention. */}
+            <section>
+              <h2>Week-on-Week Trend</h2>
+              <p className="subtitle" style={{ marginBottom: 10 }}>
+                Each week shows the current state of opportunities booked that week — how many completed a meeting,
+                moved to a second, converted to pipeline, or turned out irrelevant.
+              </p>
+              <WeeklyTrendChart buckets={weeklyTrend} />
             </section>
           </>
         )}

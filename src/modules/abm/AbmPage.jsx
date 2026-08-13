@@ -114,16 +114,20 @@ export function AbmPage() {
         </section>
       )}
       {hasMultipleSegments && (
-        <PeriodToggle
-          options={segments.map((s) => ({ value: s.id, label: s.label }))}
-          value={segmentId}
-          onChange={setSegmentId}
-        />
+        <div className="pipeline-toolbar">
+          <PeriodToggle
+            options={segments.map((s) => ({ value: s.id, label: s.label }))}
+            value={segmentId}
+            onChange={setSegmentId}
+          />
+          {data && <PageMeta lastUpdated={data.generated_at} onRefresh={refresh} style={{ marginBottom: 0 }} />}
+        </div>
       )}
       <AsyncState loading={loading && !data} error={error}>
         {data && (
           <>
-            <PageMeta lastUpdated={data.generated_at} onRefresh={refresh} />
+            {/* No period toggle to pair with when there's only one segment — falls back to its own row. */}
+            {!hasMultipleSegments && <PageMeta lastUpdated={data.generated_at} onRefresh={refresh} />}
             <KpiRow
               items={[
                 { label: "Target Accounts", value: data.summary.total_companies },

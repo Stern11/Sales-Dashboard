@@ -88,7 +88,6 @@ export function PipelinePage() {
       <AsyncState loading={loading} error={error}>
         {data && (
           <>
-            <PageMeta lastUpdated={data.generated_at || undefined} onRefresh={refresh} />
             <KpiRow
               items={[
                 { label: "Total Leads", value: summary.total },
@@ -99,7 +98,10 @@ export function PipelinePage() {
               ]}
             />
             <section>
-              <h2>Open Pipeline by Stage</h2>
+              <div className="pipeline-toolbar" style={{ marginBottom: 10 }}>
+                <h2 style={{ margin: 0 }}>Open Pipeline by Stage</h2>
+                <PageMeta lastUpdated={data.generated_at || undefined} onRefresh={refresh} style={{ marginBottom: 0 }} />
+              </div>
               <FunnelChart
                 stages={ACTIVE_STAGES.map((s) => ({ stage: s.label, count: summary.by_stage[s.value] || 0 }))}
               />

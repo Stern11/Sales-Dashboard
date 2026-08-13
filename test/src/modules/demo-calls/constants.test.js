@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   BOOKED_PERIOD_OPTIONS, resolvePeriodRange, isWithinRange,
-  OUTCOME_OPTIONS, outcomeMeta, STATUS_OPTIONS, statusMeta, effectiveStatus, summarizeLeads,
+  OUTCOME_OPTIONS, outcomeMeta, isFutureCallDate, outcomeOptionsFor,
+  STATUS_OPTIONS, statusMeta, effectiveStatus, summarizeLeads,
   FUNNEL_TREND_SERIES, weeklyFunnelTrend, bookedDateOf, MIN_TREND_WEEK_START,
   COMPANY_SCALE_OPTIONS, scaleLabel,
 } from "../../../../src/modules/demo-calls/constants.js";
@@ -83,6 +84,41 @@ describe("outcomeMeta / statusMeta", () => {
   });
 });
 
+describe("isFutureCallDate / outcomeOptionsFor", () => {
+  function daysFromToday(n) {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() + n);
+    const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, "0"), day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }
+
+  it("today and past dates are not future", () => {
+    expect(isFutureCallDate(daysFromToday(0))).toBe(false);
+    expect(isFutureCallDate(daysFromToday(-1))).toBe(false);
+  });
+  it("tomorrow onward is future", () => {
+    expect(isFutureCallDate(daysFromToday(1))).toBe(true);
+    expect(isFutureCallDate(daysFromToday(30))).toBe(true);
+  });
+  it("no date at all is not future", () => {
+    expect(isFutureCallDate(null)).toBe(false);
+    expect(isFutureCallDate("")).toBe(false);
+  });
+
+  it("a future date can only be Scheduled — Completed/No Show aren't offered", () => {
+    const options = outcomeOptionsFor(daysFromToday(7));
+    expect(options.map((o) => o.value)).toEqual(["scheduled"]);
+  });
+  it("today or a past date can be Completed/No Show but not Scheduled", () => {
+    expect(outcomeOptionsFor(daysFromToday(0)).map((o) => o.value)).toEqual(["completed", "no_show"]);
+    expect(outcomeOptionsFor(daysFromToday(-3)).map((o) => o.value)).toEqual(["completed", "no_show"]);
+  });
+  it("no date at all behaves like today/past — Completed/No Show, not Scheduled", () => {
+    expect(outcomeOptionsFor(null).map((o) => o.value)).toEqual(["completed", "no_show"]);
+  });
+});
+
 describe("effectiveStatus", () => {
   it("is 'active' when nothing overrides it", () => {
     expect(effectiveStatus("active", null)).toBe("active");
@@ -100,23 +136,24 @@ describe("effectiveStatus", () => {
 describe("summarizeLeads", () => {
   it("matches the server's summarize() for the same input — hand-mirrored with no shared source", () => {
     const leads = [
-      { status: "active", call_count: 2, completed_count: 1, no_show_count: 1, pipeline_lead_id: null, company_scale: "enterprise" },
-      { status: "active", call_count: 0, completed_count: 0, no_show_count: 0, pipeline_lead_id: "p1", company_scale: "mid_market" },
-      { status: "irrelevant", call_count: 1, completed_count: 1, no_show_count: 0, pipeline_lead_id: null, company_scale: null },
+      { status: "active", call_count: 2, completed_count: 1, no_show_count: 1, first_call_outcome: "no_show", second_call_outcome: "completed", third_call_outcome: null, pipeline_lead_id: null, company_scale: "enterprise" },
+      { status: "active", call_count: 0, completed_count: 0, no_show_count: 0, first_call_outcome: null, second_call_outcome: null, third_call_outcome: null, pipeline_lead_id: "p1", company_scale: "mid_market" },
+      { status: "irrelevant", call_count: 1, completed_count: 1, no_show_count: 0, first_call_outcome: "completed", second_call_outcome: null, third_call_outcome: null, pipeline_lead_id: null, company_scale: null },
     ];
     expect(summarizeLeads(leads)).toEqual(serverSummarize(leads));
   });
 
-  it("call_1_done/call_2_done read completed_count, not call_count — a no-show attempt isn't 'done'", () => {
+  it("call_1_done/call_2_done read the outcome of that specific call number, not merely how many calls were completed overall", () => {
     const leads = [
-      // call_count 1 but nothing completed — a no-show, not a done call.
-      { status: "active", call_count: 1, completed_count: 0, no_show_count: 1, pipeline_lead_id: null, company_scale: null },
-      // call_count 2 (a no-show retried), only the retry completed.
-      { status: "active", call_count: 2, completed_count: 1, no_show_count: 1, pipeline_lead_id: null, company_scale: null },
+      // call #1 was a no-show, call #2 (the retry) completed — counts
+      // toward call_2_done only, never call_1_done.
+      { status: "active", call_count: 2, completed_count: 1, no_show_count: 1, first_call_outcome: "no_show", second_call_outcome: "completed", third_call_outcome: null, pipeline_lead_id: null, company_scale: null },
+      // call #1 itself completed.
+      { status: "active", call_count: 1, completed_count: 1, no_show_count: 0, first_call_outcome: "completed", second_call_outcome: null, third_call_outcome: null, pipeline_lead_id: null, company_scale: null },
     ];
     const s = summarizeLeads(leads);
-    expect(s.call_1_done).toBe(1);
-    expect(s.call_2_done).toBe(0);
+    expect(s.call_1_done).toBe(1); // only the second lead
+    expect(s.call_2_done).toBe(1); // only the first lead
   });
 
   it("counts mid_market and enterprise leads for the KPI card, independent of status", () => {
@@ -240,12 +277,12 @@ describe("weeklyFunnelTrend", () => {
     });
   });
 
-  it("completed_count thresholds feed call_1_done/call_2_done independently — a logged no-show doesn't count as done", () => {
+  it("call_1_done/call_2_done read the outcome of that specific call number — a no-show on call 1 doesn't count as done even if a later call completed", () => {
     const now = new Date().toISOString();
     const [bucket] = weeklyFunnelTrend([
-      { created_at: now, call_count: 1, completed_count: 0, status: "active", pipeline_lead_id: null },
-      { created_at: now, call_count: 1, completed_count: 1, status: "active", pipeline_lead_id: null },
-      { created_at: now, call_count: 2, completed_count: 2, status: "active", pipeline_lead_id: null },
+      { created_at: now, first_call_outcome: "no_show", status: "active", pipeline_lead_id: null },
+      { created_at: now, first_call_outcome: "completed", status: "active", pipeline_lead_id: null },
+      { created_at: now, first_call_outcome: "completed", second_call_outcome: "completed", status: "active", pipeline_lead_id: null },
     ], 8);
     expect(bucket.booked).toBe(3);
     expect(bucket.call_1_done).toBe(2);
@@ -255,8 +292,8 @@ describe("weeklyFunnelTrend", () => {
   it("counts pipeline_lead_id and status:irrelevant independently of call progress", () => {
     const now = new Date().toISOString();
     const [bucket] = weeklyFunnelTrend([
-      { created_at: now, completed_count: 0, status: "active", pipeline_lead_id: "p1" },
-      { created_at: now, completed_count: 0, status: "irrelevant", pipeline_lead_id: null },
+      { created_at: now, status: "active", pipeline_lead_id: "p1" },
+      { created_at: now, status: "irrelevant", pipeline_lead_id: null },
     ], 8);
     expect(bucket.added_to_pipeline).toBe(1);
     expect(bucket.irrelevant).toBe(1);
@@ -265,8 +302,8 @@ describe("weeklyFunnelTrend", () => {
   it("excludes irrelevant leads from call_1_done/call_2_done — matches summarizeLeads' semantics, which also only counts active leads toward call progress", () => {
     const now = new Date().toISOString();
     const [bucket] = weeklyFunnelTrend([
-      { created_at: now, completed_count: 2, status: "irrelevant", pipeline_lead_id: null },
-      { created_at: now, completed_count: 1, status: "active", pipeline_lead_id: null },
+      { created_at: now, first_call_outcome: "completed", second_call_outcome: "completed", status: "irrelevant", pipeline_lead_id: null },
+      { created_at: now, first_call_outcome: "completed", status: "active", pipeline_lead_id: null },
     ], 8);
     expect(bucket.booked).toBe(2);
     expect(bucket.call_1_done).toBe(1);

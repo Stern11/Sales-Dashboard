@@ -92,11 +92,13 @@ export function MarketingPage() {
 
   return (
     <div>
-      <PeriodToggle options={PERIOD_OPTIONS} value={period} onChange={setPeriod} />
+      <div className="pipeline-toolbar">
+        <PeriodToggle options={PERIOD_OPTIONS} value={period} onChange={setPeriod} />
+        {data && <PageMeta lastUpdated={data.generated_at} onRefresh={refresh} style={{ marginBottom: 0 }} />}
+      </div>
       <AsyncState loading={loading} error={error}>
         {data && (
           <>
-            <PageMeta lastUpdated={data.generated_at} onRefresh={refresh} />
             <KpiRow
               items={[
                 {

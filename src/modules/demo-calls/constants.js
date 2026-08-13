@@ -5,10 +5,37 @@
 export const OUTCOME_OPTIONS = [
   { value: "completed", label: "Completed", pillVariant: "ready" },
   { value: "no_show", label: "No Show", pillVariant: "lost" },
+  { value: "scheduled", label: "Scheduled", pillVariant: "stage" },
 ];
 
 export function outcomeMeta(value) {
   return OUTCOME_OPTIONS.find((o) => o.value === value) || { value, label: value, pillVariant: "stage" };
+}
+
+/**
+ * A call_date strictly after today (the browser's local calendar date) hasn't
+ * happened yet, so it can't have a real Completed/No Show outcome — see
+ * outcomeOptionsFor() below, which is what actually enforces this in the call
+ * forms (AddDemoCallLeadModal's inline first call, CallLogTimeline's
+ * CallForm).
+ */
+export function isFutureCallDate(dateStr) {
+  if (!dateStr) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return new Date(`${dateStr}T00:00:00`) > today;
+}
+
+/**
+ * The outcome choices valid for a given call_date: a future date can only be
+ * "Scheduled" (the meeting hasn't happened yet, so Completed/No Show would be
+ * a lie); any other date can be Completed/No Show but not "Scheduled" (once a
+ * date has arrived or passed, the call either happened or didn't).
+ */
+export function outcomeOptionsFor(dateStr) {
+  return isFutureCallDate(dateStr)
+    ? OUTCOME_OPTIONS.filter((o) => o.value === "scheduled")
+    : OUTCOME_OPTIONS.filter((o) => o.value !== "scheduled");
 }
 
 // "no_show" isn't a real value of the `status` column (that's still just
@@ -85,16 +112,17 @@ export function bookedDateOf(lead) {
 export function summarizeLeads(leads) {
   const active = leads.filter((l) => l.status === "active");
   const callCount = (l) => Number(l.call_count) || 0;
-  const completedCount = (l) => Number(l.completed_count) || 0;
   return {
     total: leads.length,
     awaiting_first_call: active.filter((l) => callCount(l) === 0).length,
-    // "Done" means actually completed — a logged no-show still increments
-    // call_count (an attempt was made) but must not count as a meeting done,
-    // so this reads off completed_count instead.
-    call_1_done: active.filter((l) => completedCount(l) >= 1).length,
-    call_2_done: active.filter((l) => completedCount(l) >= 2).length,
-    call_3_done: active.filter((l) => completedCount(l) >= 3).length,
+    // "Meeting N Done" means call #N *itself* was completed — not merely
+    // "N or more calls have been completed somewhere in this lead's history".
+    // A lead whose first call was a no-show and second call succeeded must
+    // not count toward "First Meeting Done" (it does count toward "Second
+    // Meeting Done") — that completion was call #2, not call #1.
+    call_1_done: active.filter((l) => l.first_call_outcome === "completed").length,
+    call_2_done: active.filter((l) => l.second_call_outcome === "completed").length,
+    call_3_done: active.filter((l) => l.third_call_outcome === "completed").length,
     no_shows: leads.reduce((sum, l) => sum + (Number(l.no_show_count) || 0), 0),
     added_to_pipeline: leads.filter((l) => l.pipeline_lead_id).length,
     irrelevant: leads.filter((l) => l.status === "irrelevant").length,
@@ -205,12 +233,12 @@ export function weeklyFunnelTrend(leads, maxWeeks = 8, floorWeekStartIso = MIN_T
     // for currently-active leads (irrelevant is its own bucket, a side
     // branch — same "active vs. side-state" split Sales Pipeline uses for
     // cold/lost) — otherwise the two charts would disagree on "Meeting 1
-    // Done". Uses completed_count, not call_count, so a no-show attempt
-    // never counts as a meeting "done".
+    // Done". Checks call #N's own outcome, not merely "N calls completed
+    // somewhere" — a no-show on call 1 followed by a completed call 2 counts
+    // toward Meeting 2 Done, never Meeting 1 Done.
     if (l.status === "active") {
-      const completedCount = Number(l.completed_count) || 0;
-      if (completedCount >= 1) bucket.call_1_done += 1;
-      if (completedCount >= 2) bucket.call_2_done += 1;
+      if (l.first_call_outcome === "completed") bucket.call_1_done += 1;
+      if (l.second_call_outcome === "completed") bucket.call_2_done += 1;
     }
     if (l.pipeline_lead_id) bucket.added_to_pipeline += 1;
     if (l.status === "irrelevant") bucket.irrelevant += 1;
