@@ -144,22 +144,38 @@ export function DemoCallsPage() {
    * Promise.allSettled so one failure (e.g. a stale/already-added row) doesn't
    * abort the rest of the batch.
    */
+  async function addOneToPipeline(lead, actor) {
+    let pipelineLeadId;
+    try {
+      const { lead: pipelineLead } = await createPipelineLead(demoCallLeadToPipelinePrefill(lead), actor);
+      pipelineLeadId = pipelineLead.id;
+    } catch (err) {
+      // Same recovery as the drawer's single-lead flow — a pipeline lead for
+      // this contact can already exist without this demo call lead being
+      // linked to it, so link to the existing one instead of leaving it
+      // unsynced (see DemoCallLeadDrawer.jsx's handleAddToPipeline).
+      if (err.status === 409 && err.body?.existing_lead?.id) {
+        pipelineLeadId = err.body.existing_lead.id;
+      } else {
+        throw err;
+      }
+    }
+    await linkPipeline(lead.id, pipelineLeadId, actor);
+  }
+
   async function handleBulkAdd() {
     const actor = await ensureName();
     if (!actor) return;
     setBulkLoading(true);
     setBulkStatus(null);
     const toAdd = bookedLeads.filter((l) => selectedIds.has(l.id));
-    const results = await Promise.allSettled(toAdd.map(async (lead) => {
-      const { lead: pipelineLead } = await createPipelineLead(demoCallLeadToPipelinePrefill(lead), actor);
-      await linkPipeline(lead.id, pipelineLead.id, actor);
-    }));
+    const results = await Promise.allSettled(toAdd.map((lead) => addOneToPipeline(lead, actor)));
     const added = results.filter((r) => r.status === "fulfilled").length;
     const skipped = results.length - added;
     setBulkLoading(false);
     setSelectedIds(new Set());
     refresh();
-    setBulkStatus(`Added ${added} opportunit${added === 1 ? "y" : "ies"} to the pipeline.${skipped ? ` ${skipped} skipped (already in pipeline).` : ""}`);
+    setBulkStatus(`Added ${added} opportunit${added === 1 ? "y" : "ies"} to the pipeline.${skipped ? ` ${skipped} skipped (a link failure — try again).` : ""}`);
   }
 
   return (

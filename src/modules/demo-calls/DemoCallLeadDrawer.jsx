@@ -92,18 +92,34 @@ export function DemoCallLeadDrawer({ leadId, onClose, onChanged }) {
     setPipelineStatus(null);
     const actor = await ensureName();
     if (!actor) return;
+    let pipelineLeadId;
+    let linkedExisting = false;
     try {
       const { lead: pipelineLead } = await createPipelineLead(demoCallLeadToPipelinePrefill(values), actor);
-      await linkPipeline(leadId, pipelineLead.id, actor);
-      refresh();
-      onChanged?.();
-      setPipelineStatus({ ok: true, pipelineLeadId: pipelineLead.id });
+      pipelineLeadId = pipelineLead.id;
     } catch (err) {
-      if (err.status === 409) {
-        setPipelineStatus({ ok: false, message: `Already in the pipeline (${err.body?.existing_lead?.stage || "unknown stage"}).` });
+      // A pipeline lead for this HubSpot contact can already exist without
+      // this demo call lead ever having been linked to it — e.g. added
+      // through a different module (Marketing/ABM bulk-add, a manual entry
+      // that happened to reference the same contact), or a previous "Add to
+      // pipeline" attempt here that created the pipeline lead but then
+      // failed on the link step below. Link to that existing lead instead of
+      // just reporting the conflict and leaving the two records out of sync.
+      if (err.status === 409 && err.body?.existing_lead?.id) {
+        pipelineLeadId = err.body.existing_lead.id;
+        linkedExisting = true;
       } else {
         setPipelineStatus({ ok: false, message: err.message });
+        return;
       }
+    }
+    try {
+      await linkPipeline(leadId, pipelineLeadId, actor);
+      refresh();
+      onChanged?.();
+      setPipelineStatus({ ok: true, pipelineLeadId, linkedExisting });
+    } catch (err) {
+      setPipelineStatus({ ok: false, message: err.message });
     }
   }
 
@@ -203,7 +219,11 @@ export function DemoCallLeadDrawer({ leadId, onClose, onChanged }) {
                   </button>
                   {pipelineStatus && (
                     <p className={pipelineStatus.ok ? "subtitle" : "form-error"} style={{ marginTop: 8 }}>
-                      {pipelineStatus.ok ? "Added to the pipeline." : pipelineStatus.message}
+                      {pipelineStatus.ok
+                        ? (pipelineStatus.linkedExisting
+                          ? "Linked to the existing pipeline lead for this contact."
+                          : "Added to the pipeline.")
+                        : pipelineStatus.message}
                     </p>
                   )}
                 </>
