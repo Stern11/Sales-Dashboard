@@ -116,6 +116,13 @@ export function MarketingPage() {
                 { label: "SQL", value: sqlCount, sub: "reached this stage or beyond" },
               ]}
             />
+            {data.summary?.truncated && (
+              <p className="subtitle" style={{ marginBottom: 16 }} role="status">
+                Showing the {data.summary.total_leads.toLocaleString()} most recent of{" "}
+                {data.summary.total_matching.toLocaleString()} matching contacts — HubSpot paging is
+                capped per request, so the figures below cover that subset, not the full portal.
+              </p>
+            )}
             {spend.error && (
               <p className="subtitle" style={{ marginBottom: 16 }}>
                 Ad Spend / Live Campaigns: {spend.error} — LinkedIn Ad Leads, Demo Calls, SQL, and the funnel below

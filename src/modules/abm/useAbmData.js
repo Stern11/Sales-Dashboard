@@ -40,7 +40,12 @@ export function useAllAbmData(segmentIds) {
       if (!background) setLoading(true);
       setError(null);
       try {
-        const entries = await Promise.all(
+        // allSettled, not all: these are independent per-segment requests, and
+        // Promise.all's fail-fast meant one segment erroring threw away every
+        // other segment's data too — the user lost the whole page because one
+        // of four fetches failed. Now a failed segment is simply absent, and
+        // the error only surfaces if nothing at all came back.
+        const results = await Promise.allSettled(
           segmentIds.map(async (segmentId) => {
             const res = await fetch(urlFor(segmentId), { cache: "no-store" });
             const body = await res.json().catch(() => ({}));
@@ -49,7 +54,16 @@ export function useAllAbmData(segmentIds) {
             return [segmentId, body];
           })
         );
-        if (id === requestId.current) setDataById(Object.fromEntries(entries));
+        if (id !== requestId.current) return;
+
+        const entries = results.filter((r) => r.status === "fulfilled").map((r) => r.value);
+        const failure = results.find((r) => r.status === "rejected");
+        if (entries.length) {
+          setDataById(Object.fromEntries(entries));
+          setError(null);
+        } else if (failure) {
+          throw failure.reason;
+        }
       } catch (err) {
         if (id === requestId.current) setError(err.message || String(err));
       } finally {

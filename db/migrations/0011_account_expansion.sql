@@ -6,7 +6,7 @@
 -- and Demo Calls, keyed by the target account's HubSpot *company* id
 -- (lib/abm-segments/*.js's `companies` list), not a contact id.
 
-create table account_expansion (
+create table if not exists account_expansion (
   id                     uuid primary key default gen_random_uuid(),
   hubspot_company_id     text not null,
   company_name           text not null,
@@ -31,10 +31,10 @@ create table account_expansion (
 
 -- One expansion-planning row per HubSpot company, regardless of segment —
 -- get-or-create on first view (see lib/account-expansion/queries.js).
-create unique index account_expansion_hubspot_company_id_uq
+create unique index if not exists account_expansion_hubspot_company_id_uq
   on account_expansion (hubspot_company_id);
 
-create table account_expansion_areas (
+create table if not exists account_expansion_areas (
   id                uuid primary key default gen_random_uuid(),
   account_id        uuid not null references account_expansion(id) on delete cascade,
   area              text not null,
@@ -53,12 +53,12 @@ create table account_expansion_areas (
   updated_at        timestamptz not null default now()
 );
 
-create index account_expansion_areas_account_id_idx on account_expansion_areas (account_id);
+create index if not exists account_expansion_areas_account_id_idx on account_expansion_areas (account_id);
 
 -- Whitespace is intentionally a handful of free-text area rows per account
 -- (not a fixed enum of areas) — different accounts have different adjacent
 -- functions worth tracking.
-create table account_expansion_whitespace (
+create table if not exists account_expansion_whitespace (
   id          uuid primary key default gen_random_uuid(),
   account_id  uuid not null references account_expansion(id) on delete cascade,
   area        text not null,
@@ -70,10 +70,10 @@ create table account_expansion_whitespace (
   updated_at  timestamptz not null default now()
 );
 
-create unique index account_expansion_whitespace_area_uq
+create unique index if not exists account_expansion_whitespace_area_uq
   on account_expansion_whitespace (account_id, area);
 
-create table account_expansion_signals (
+create table if not exists account_expansion_signals (
   id                uuid primary key default gen_random_uuid(),
   account_id        uuid not null references account_expansion(id) on delete cascade,
   signal_date       date not null,
@@ -92,9 +92,9 @@ create table account_expansion_signals (
   updated_at        timestamptz not null default now()
 );
 
-create index account_expansion_signals_account_id_idx on account_expansion_signals (account_id, signal_date desc);
+create index if not exists account_expansion_signals_account_id_idx on account_expansion_signals (account_id, signal_date desc);
 
-create table account_expansion_stakeholders (
+create table if not exists account_expansion_stakeholders (
   id                uuid primary key default gen_random_uuid(),
   account_id        uuid not null references account_expansion(id) on delete cascade,
   name              text,
@@ -110,9 +110,9 @@ create table account_expansion_stakeholders (
   updated_at        timestamptz not null default now()
 );
 
-create index account_expansion_stakeholders_account_id_idx on account_expansion_stakeholders (account_id);
+create index if not exists account_expansion_stakeholders_account_id_idx on account_expansion_stakeholders (account_id);
 
-create table account_expansion_questions (
+create table if not exists account_expansion_questions (
   id                uuid primary key default gen_random_uuid(),
   account_id        uuid not null references account_expansion(id) on delete cascade,
   question          text not null,
@@ -126,4 +126,4 @@ create table account_expansion_questions (
   updated_at        timestamptz not null default now()
 );
 
-create index account_expansion_questions_account_id_idx on account_expansion_questions (account_id);
+create index if not exists account_expansion_questions_account_id_idx on account_expansion_questions (account_id);

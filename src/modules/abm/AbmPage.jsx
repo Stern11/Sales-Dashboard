@@ -140,11 +140,17 @@ export function AbmPage() {
                 {
                   label: "Emails On File",
                   value: `${data.summary.emails_on_file} / ${data.summary.total_leads}`,
-                  sub: `${Math.round((100 * data.summary.emails_on_file) / data.summary.total_leads)}%`,
+                  // total_leads is 0 for a segment with no contacts yet, which
+                  // rendered a literal "NaN%".
+                  sub: data.summary.total_leads
+                    ? `${Math.round((100 * data.summary.emails_on_file) / data.summary.total_leads)}%`
+                    : "—",
                 },
                 {
                   label: "LinkedIn Reachout Started",
-                  value: `${data.summary.total_leads - data.summary.linkedin_funnel[0].count} / ${data.summary.total_leads}`,
+                  // linkedin_funnel is empty for a segment with no contacts —
+                  // indexing [0] then threw a TypeError and blanked the page.
+                  value: `${data.summary.total_leads - (data.summary.linkedin_funnel[0]?.count ?? 0)} / ${data.summary.total_leads}`,
                 },
                 {
                   label: "Calls Connected",

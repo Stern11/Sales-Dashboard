@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { onSessionExpired } from "../lib/sessionExpired.js";
 
 const AuthContext = createContext(null);
 
@@ -22,6 +23,12 @@ export function AuthProvider({ children }) {
   }, []);
 
   useEffect(() => { refresh(); }, [refresh]);
+
+  // Any request coming back 401 means the cookie lapsed. Re-checking with
+  // the server (rather than assuming) keeps a one-off 401 from logging
+  // someone out, while a genuinely expired session resolves to
+  // authenticated:false and AuthGate swaps in the login screen.
+  useEffect(() => onSessionExpired(refresh), [refresh]);
 
   const logout = useCallback(async () => {
     await fetch("/api/auth?action=logout", { method: "POST" });

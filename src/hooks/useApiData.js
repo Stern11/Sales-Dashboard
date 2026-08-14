@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { readCache, writeCache } from "../lib/apiCache.js";
+import { notifySessionExpired } from "../lib/sessionExpired.js";
 
 export const REFRESH_MS = 5 * 60 * 1000; // auto re-fetch every 5 minutes while the tab is open
 
@@ -29,6 +30,13 @@ export function useApiData(url) {
     try {
       const res = await fetch(url, { cache: "no-store" });
       const body = await res.json().catch(() => ({}));
+      // A 401 means the session cookie expired mid-session. Surfacing it as
+      // a generic error would leave "Not authenticated." on screen forever;
+      // this sends the app back to the login screen instead.
+      if (res.status === 401) {
+        notifySessionExpired();
+        return;
+      }
       if (!res.ok) throw new Error(body.error || `Request failed (${res.status})`);
       if (id === requestId.current) {
         setData(body);

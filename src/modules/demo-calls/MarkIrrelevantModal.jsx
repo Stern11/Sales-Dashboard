@@ -9,12 +9,19 @@ export function MarkIrrelevantModal({ lead, onClose, onChanged }) {
   const { ensureName } = useNameTagContext();
 
   async function handleSubmit(e) {
-    e.preventDefault();
-    const actor = await ensureName();
-    if (!actor) return;
-    const { lead: updated } = await setStatus(lead.id, { status: "irrelevant", reason: reason || null, actor });
-    onChanged?.(updated);
-    onClose();
+    try {
+      e.preventDefault();
+      const actor = await ensureName();
+      if (!actor) return;
+      const { lead: updated } = await setStatus(lead.id, { status: "irrelevant", reason: reason || null, actor });
+      onChanged?.(updated);
+      onClose();
+    } catch (err) {
+      // Caught so a failed write isn't an unhandled promise rejection.
+      // The message itself is already on screen: the mutation hook stores
+      // it in `error`, which this component renders below.
+      console.error("handleSubmit failed:", err);
+    }
   }
 
   return (

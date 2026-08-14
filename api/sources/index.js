@@ -105,6 +105,15 @@ async function buildSourcesPayload(token, period) {
     total_leads: leads.length,
     total_meetings: totalMeetings,
     channels,
+    // hubspotSearchAll stops after DEFAULT_MAX_SEARCH_PAGES (4000 contacts)
+    // and marks the result `.truncated`; its own docblock asks callers to
+    // surface that rather than present a partial count as the whole picture.
+    // `contacts.map(...)` above drops the array's extra properties, so both
+    // are read from the source array here.
+    truncated: contacts.truncated === true,
+    // HubSpot's true match count for the filter, which exceeds total_leads
+    // whenever the page cap cut the scan short.
+    total_matching: contacts.total ?? leads.length,
   };
 
   return { period, stages: stages.map((s) => ({ value: s.value, label: s.label })), summary, leads };

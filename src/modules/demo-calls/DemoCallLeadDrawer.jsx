@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Drawer } from "../../components/Drawer.jsx";
 import { AsyncState } from "../../components/AsyncState.jsx";
@@ -29,11 +29,27 @@ export function DemoCallLeadDrawer({ leadId, onClose, onChanged }) {
   const { createLead: createPipelineLead, loading: addingToPipeline } = usePipelineMutations();
   const { ensureName } = useNameTagContext();
 
+  // Same fix as LeadDetailDrawer: `data.lead` is a new object after every
+  // 5-minute background revalidation, and copying it in unconditionally
+  // wiped whatever the user was typing. Adopt server state only for a
+  // different lead, or when there's nothing unsaved to lose.
+  const seededLeadIdRef = useRef(null);
+  const dirtyRef = useRef(false);
+
   useEffect(() => {
-    if (data?.lead) setValues(data.lead);
+    const lead = data?.lead;
+    if (!lead) return;
+    if (seededLeadIdRef.current !== lead.id) {
+      seededLeadIdRef.current = lead.id;
+      dirtyRef.current = false;
+      setValues(lead);
+    } else if (!dirtyRef.current) {
+      setValues(lead);
+    }
   }, [data?.lead]);
 
   function patch(update) {
+    dirtyRef.current = true;
     setValues((v) => ({ ...v, ...update }));
   }
 
@@ -53,6 +69,7 @@ export function DemoCallLeadDrawer({ leadId, onClose, onChanged }) {
         company_scale: values.company_scale || null,
         source: values.source || null,
       }, actor);
+      dirtyRef.current = false;
       refresh();
       onChanged?.();
     } catch (err) {
@@ -63,9 +80,16 @@ export function DemoCallLeadDrawer({ leadId, onClose, onChanged }) {
   async function handleReactivate() {
     const actor = await ensureName();
     if (!actor) return;
-    await setStatus(leadId, { status: "active", actor });
-    refresh();
-    onChanged?.();
+    try {
+      await setStatus(leadId, { status: "active", actor });
+      refresh();
+      onChanged?.();
+    } catch (err) {
+      // Caught so a failed write isn't an unhandled promise rejection.
+      // The message itself is already on screen: the mutation hook stores
+      // it in `error`, which this component renders below.
+      console.error("handleReactivate failed:", err);
+    }
   }
 
   function handleIrrelevantChanged() {
@@ -87,6 +111,12 @@ export function DemoCallLeadDrawer({ leadId, onClose, onChanged }) {
       }
       refresh();
       onChanged?.();
+    } catch (err) {
+      // Partial imports are possible (the calls are added one at a time, on
+      // purpose — see the call_number ordering note above), so say how far
+      // it got rather than implying nothing happened.
+      setSaveError(`Import stopped partway: ${err.message}`);
+      refresh();
     } finally {
       setImporting(false);
     }

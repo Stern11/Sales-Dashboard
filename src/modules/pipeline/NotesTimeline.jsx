@@ -24,10 +24,17 @@ export function NotesTimeline({ leadId, notes, onNoteAdded }) {
     if (!body.trim()) return;
     const actor = await ensureName();
     if (!actor) return;
-    const { note } = await addNote(leadId, { body, author: actor, tagged_emails: taggedEmails });
-    setBody("");
-    setTaggedEmails([]);
-    onNoteAdded?.(note);
+    try {
+      const { note } = await addNote(leadId, { body, author: actor, tagged_emails: taggedEmails });
+      setBody("");
+      setTaggedEmails([]);
+      onNoteAdded?.(note);
+    } catch (err) {
+      // Caught so a failed write isn't an unhandled promise rejection.
+      // The message itself is already on screen: the mutation hook stores
+      // it in `error`, which this component renders below.
+      console.error("submitNote failed:", err);
+    }
   }
 
   function handleFormSubmit(e) {

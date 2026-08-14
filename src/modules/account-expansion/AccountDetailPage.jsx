@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { AsyncState } from "../../components/AsyncState.jsx";
 import { StatusPill } from "../../components/StatusPill.jsx";
@@ -44,8 +44,22 @@ export function AccountDetailPage() {
   const [editingFootprint, setEditingFootprint] = useState(false);
 
   const [footprintValues, setFootprintValues] = useState(null);
+
+  // Same fix as the pipeline/demo-calls drawers: a background revalidation
+  // must not overwrite footprint edits the user hasn't saved yet.
+  const seededAccountIdRef = useRef(null);
+  const footprintDirtyRef = useRef(false);
+
   useEffect(() => {
-    if (data?.account) setFootprintValues(data.account);
+    const account = data?.account;
+    if (!account) return;
+    if (seededAccountIdRef.current !== account.id) {
+      seededAccountIdRef.current = account.id;
+      footprintDirtyRef.current = false;
+      setFootprintValues(account);
+    } else if (!footprintDirtyRef.current) {
+      setFootprintValues(account);
+    }
   }, [data?.account]);
 
   const [saveError, setSaveError] = useState(null);
@@ -67,6 +81,7 @@ export function AccountDetailPage() {
         footprint_stakeholder: footprintValues.footprint_stakeholder,
         footprint_notes: footprintValues.footprint_notes,
       }, actor);
+      footprintDirtyRef.current = false;
       refresh();
       setEditingFootprint(false);
     } catch (err) {
@@ -75,10 +90,12 @@ export function AccountDetailPage() {
   }
 
   function patch(update) {
+    footprintDirtyRef.current = true;
     setFootprintValues((v) => ({ ...v, ...update }));
   }
 
   function cancelEditFootprint() {
+    footprintDirtyRef.current = false;
     setFootprintValues(data.account);
     setSaveError(null);
     setEditingFootprint(false);

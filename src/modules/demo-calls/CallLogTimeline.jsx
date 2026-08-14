@@ -77,9 +77,16 @@ function CallEntry({ call, onSaved }) {
   async function handleSave(values) {
     const actor = await ensureName();
     if (!actor) return;
-    const { call: updated } = await updateCall(call.lead_id, call.id, values, actor);
-    setEditing(false);
-    onSaved?.(updated);
+    try {
+      const { call: updated } = await updateCall(call.lead_id, call.id, values, actor);
+      setEditing(false);
+      onSaved?.(updated);
+    } catch (err) {
+      // Caught so a failed write isn't an unhandled promise rejection.
+      // The message itself is already on screen: the mutation hook stores
+      // it in `error`, which this component renders below.
+      console.error("handleSave failed:", err);
+    }
   }
 
   if (editing) {
@@ -151,9 +158,16 @@ export function CallLogTimeline({ leadId, calls, onChanged }) {
   async function handleAdd(values) {
     const actor = await ensureName();
     if (!actor) return;
-    await addCall(leadId, values, actor);
-    setAdding(false);
-    onChanged?.();
+    try {
+      await addCall(leadId, values, actor);
+      setAdding(false);
+      onChanged?.();
+    } catch (err) {
+      // Caught so a failed write isn't an unhandled promise rejection.
+      // The message itself is already on screen: the mutation hook stores
+      // it in `error`, which this component renders below.
+      console.error("handleAdd failed:", err);
+    }
   }
 
   return (

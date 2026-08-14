@@ -16,13 +16,20 @@ export function StageChangeModal({ lead, targetStage, onClose, onChanged }) {
   const { ensureName } = useNameTagContext();
 
   async function handleSubmit(e) {
-    e.preventDefault();
-    const actor = await ensureName();
-    if (!actor) return;
-    const to_stage = isRevive ? reviveStage : targetStage;
-    const { lead: updated } = await changeStage(lead.id, { to_stage, reason: isRevive ? null : reason || null, actor });
-    onChanged?.(updated);
-    onClose();
+    try {
+      e.preventDefault();
+      const actor = await ensureName();
+      if (!actor) return;
+      const to_stage = isRevive ? reviveStage : targetStage;
+      const { lead: updated } = await changeStage(lead.id, { to_stage, reason: isRevive ? null : reason || null, actor });
+      onChanged?.(updated);
+      onClose();
+    } catch (err) {
+      // Caught so a failed write isn't an unhandled promise rejection.
+      // The message itself is already on screen: the mutation hook stores
+      // it in `error`, which this component renders below.
+      console.error("handleSubmit failed:", err);
+    }
   }
 
   return (

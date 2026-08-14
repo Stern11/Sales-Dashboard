@@ -45,9 +45,16 @@ export function SignalModal({ accountId, signal, areas, onClose, onSaved }) {
   }
 
   async function handleRemove() {
-    await removeSignal(accountId, signal.id);
-    onSaved();
-    onClose();
+    try {
+      await removeSignal(accountId, signal.id);
+      onSaved();
+      onClose();
+    } catch (err) {
+      // Caught so a failed write isn't an unhandled promise rejection.
+      // The message itself is already on screen: the mutation hook stores
+      // it in `error`, which this component renders below.
+      console.error("handleRemove failed:", err);
+    }
   }
 
   return (

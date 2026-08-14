@@ -122,7 +122,10 @@ create table demo_call_logs (
   updated_at     timestamptz not null default now()
 );
 
-create index demo_call_logs_lead_id_idx on demo_call_logs (lead_id, call_number);
+-- Unique, not merely indexed: call_number is read positionally by
+-- listLeads() (array_agg(... order by call_number)[1..3]), so a duplicate
+-- silently shifts the first/second/third-call KPIs. See migration 0013.
+create unique index demo_call_logs_lead_id_call_number_uq on demo_call_logs (lead_id, call_number);
 
 -- Account Expansion / Account Planning module — its own top-level section
 -- (src/modules/account-expansion/), tracking Heizen's existing clients
@@ -260,3 +263,6 @@ create index account_expansion_questions_account_id_idx on account_expansion_que
 --   0010 (2026-08-14): added demo_call_leads.source
 --   0011 (2026-08-14): added Account Expansion module (6 new tables)
 --   0012 (2026-08-14): Account Expansion made standalone — hubspot_company_id now nullable
+--   0013 (2026-08-14): demo_call_logs (lead_id, call_number) made unique; renumbers
+--                      any duplicates the old addCall() race produced, and drops the
+--                      now-redundant non-unique index on the same columns

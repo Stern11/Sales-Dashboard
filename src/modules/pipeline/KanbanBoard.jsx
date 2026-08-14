@@ -13,6 +13,7 @@ import { useNameTagContext } from "../../context/NameTagContext.jsx";
  */
 export function KanbanBoard({ leads, showSideStates, onSelect, onChanged, onOptimisticMove }) {
   const [coldLostDrop, setColdLostDrop] = useState(null); // { lead, targetStage } — pending reason capture
+  const [dropError, setDropError] = useState(null);
   const { changeStage } = usePipelineMutations();
   const { ensureName } = useNameTagContext();
   const activeStages = BOARD_STAGES.filter((s) => s.isActive);
@@ -32,8 +33,14 @@ export function KanbanBoard({ leads, showSideStates, onSelect, onChanged, onOpti
     const actor = await ensureName();
     if (!actor) return;
     onOptimisticMove?.(leadId, toStage); // move it in the UI immediately, don't wait on the network
+    setDropError(null);
     try {
       await changeStage(leadId, { to_stage: toStage, actor });
+    } catch (err) {
+      // Without this the rejection was unhandled and the drag failed
+      // silently: the card had already moved optimistically, so the board
+      // showed a stage the server never accepted.
+      setDropError(`Couldn't move ${lead.company_name}: ${err.message}`);
     } finally {
       onChanged?.(); // reconciles with server truth either way (confirms on success, corrects on failure)
     }
@@ -41,6 +48,7 @@ export function KanbanBoard({ leads, showSideStates, onSelect, onChanged, onOpti
 
   return (
     <div>
+      {dropError && <p className="form-error" role="alert">{dropError}</p>}
       <div className="kanban-board">
         {activeStages.map((stage) => (
           <KanbanColumn

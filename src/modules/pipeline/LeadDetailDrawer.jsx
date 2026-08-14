@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Drawer } from "../../components/Drawer.jsx";
 import { AsyncState } from "../../components/AsyncState.jsx";
 import { StatusPill } from "../../components/StatusPill.jsx";
@@ -30,11 +30,30 @@ export function LeadDetailDrawer({ leadId, onClose, onChanged }) {
   // appears on a hit.
   const { data: demoHistory } = useApiData(leadId ? `/api/demo-calls?pipeline_lead_id=${leadId}` : null);
 
+  // `data.lead` is a fresh object after every background revalidation (the
+  // 5-minute poll in useApiData), and this effect used to copy it into
+  // `values` unconditionally — so a user typing in this form had their
+  // in-progress edits silently replaced with server state mid-sentence.
+  //
+  // Adopting server state is still right in two cases: a different lead is
+  // being shown, or the form has no unsaved changes to lose.
+  const seededLeadIdRef = useRef(null);
+  const dirtyRef = useRef(false);
+
   useEffect(() => {
-    if (data?.lead) setValues(data.lead);
+    const lead = data?.lead;
+    if (!lead) return;
+    if (seededLeadIdRef.current !== lead.id) {
+      seededLeadIdRef.current = lead.id;
+      dirtyRef.current = false;
+      setValues(lead);
+    } else if (!dirtyRef.current) {
+      setValues(lead);
+    }
   }, [data?.lead]);
 
   function patch(update) {
+    dirtyRef.current = true;
     setValues((v) => ({ ...v, ...update }));
   }
 
@@ -65,6 +84,9 @@ export function LeadDetailDrawer({ leadId, onClose, onChanged }) {
         deal_size: values.deal_size === "" ? null : Number(values.deal_size),
         project_description: values.project_description,
       }, actor);
+      // Saved — the form now matches the server again, so the next
+      // background revalidation is free to adopt server state.
+      dirtyRef.current = false;
       refresh();
       onChanged?.();
     } catch (err) {
@@ -75,9 +97,16 @@ export function LeadDetailDrawer({ leadId, onClose, onChanged }) {
   async function handleQuickMove(toStage) {
     const actor = await ensureName();
     if (!actor) return;
-    await changeStage(leadId, { to_stage: toStage, actor });
-    refresh();
-    onChanged?.();
+    try {
+      await changeStage(leadId, { to_stage: toStage, actor });
+      refresh();
+      onChanged?.();
+    } catch (err) {
+      // Caught so a failed write isn't an unhandled promise rejection.
+      // The message itself is already on screen: the mutation hook stores
+      // it in `error`, which this component renders below.
+      console.error("handleQuickMove failed:", err);
+    }
   }
 
   function handleStageChanged() {

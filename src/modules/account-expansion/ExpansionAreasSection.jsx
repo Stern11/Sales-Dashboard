@@ -46,6 +46,7 @@ function AreaCard({ area, onEdit, onToggleArchived }) {
 /** Main section — each expansion hypothesis as a compact card. Add/Edit/Archive, per the spec. */
 export function ExpansionAreasSection({ accountId, areas, onChanged }) {
   const [modalTarget, setModalTarget] = useState(null); // null closed, {} = add, area object = edit
+  const [actionError, setActionError] = useState(null);
   const [showArchived, setShowArchived] = useState(false);
   const { updateArea } = useAccountExpansionMutations();
   const { ensureName } = useNameTagContext();
@@ -55,12 +56,21 @@ export function ExpansionAreasSection({ accountId, areas, onChanged }) {
   async function toggleArchived(area) {
     const actor = await ensureName();
     if (!actor) return;
-    await updateArea(accountId, area.id, { archived: !area.archived }, actor);
-    onChanged();
+    setActionError(null);
+    try {
+      await updateArea(accountId, area.id, { archived: !area.archived }, actor);
+      onChanged();
+    } catch (err) {
+      // This section renders no mutation-hook error, so without this the
+      // archive toggle failed completely silently — the row simply stayed
+      // where it was with no indication anything had gone wrong.
+      setActionError(`Couldn't ${area.archived ? "restore" : "archive"} that area: ${err.message}`);
+    }
   }
 
   return (
     <div className="lead-detail-section">
+      {actionError && <p className="form-error" role="alert">{actionError}</p>}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
         <h4 style={{ margin: 0 }}>Expansion Areas</h4>
         <div>

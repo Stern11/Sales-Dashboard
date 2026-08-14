@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { notifySessionExpired } from "../lib/sessionExpired.js";
 
 /**
  * The app's first mutation primitive — every other hook (useApiData) is
@@ -21,6 +22,9 @@ export function useApiMutation() {
         body: body ? JSON.stringify(body) : undefined,
       });
       const json = await res.json().catch(() => ({}));
+      // Same reasoning as useApiData: an expired session should return the
+      // user to the login screen, not surface as a failed save.
+      if (res.status === 401) notifySessionExpired();
       if (!res.ok) {
         const err = new Error(json.error || `Request failed (${res.status})`);
         err.status = res.status;
