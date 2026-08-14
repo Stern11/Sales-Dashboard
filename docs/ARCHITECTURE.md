@@ -43,10 +43,17 @@ api/
   sources/index.js         → GET /api/sources?period=<lifetime|monthly|weekly> (channel attribution, all channels — Performance Marketing filters to LinkedIn)
   marketing/spend.js       → GET /api/marketing/spend (ad spend + live campaign count — scope-blocked, see below)
   pipeline/index.js        → GET/POST /api/pipeline (list+summary / create) — database-backed, not HubSpot
-  pipeline/[id]/index.js   → GET/PATCH /api/pipeline/:id (detail / edit fields)
-  pipeline/[id]/stage.js   → POST /api/pipeline/:id/stage (stage change, incl. cold/lost/revive)
-  pipeline/[id]/notes.js   → POST /api/pipeline/:id/notes (append a note)
-  pipeline/check.js        → GET /api/pipeline/check?contact_ids=... (bulk "already in pipeline" lookup)
+  pipeline/[id]/index.js   → GET/PATCH/DELETE /api/pipeline/:id (detail / edit fields / delete),
+                             plus POST ?action=stage (stage change, incl. cold/lost/revive)
+                             and POST ?action=notes (append a note) — same ?action=
+                             consolidation as demo-calls below, for the same function-cap reason
+  pipeline/check.js        → POST /api/pipeline/check (bulk "already in pipeline" lookup;
+                             POST, not GET, because the id list can be thousands long)
+  account-expansion/index.js → GET/POST/PATCH/DELETE /api/account-expansion (portfolio list,
+                             per-account detail, and every child collection — areas,
+                             whitespace, signals, stakeholders, questions — multiplexed on
+                             ?action= and ?item_id=; see the file header for the full table)
+  auth/index.js            → GET /api/auth (session status), POST /api/auth?action=login|logout
   demo-calls/index.js  → GET/POST /api/demo-calls (list+summary / create — database-backed;
                          also GET ?pipeline_lead_id=... reverse lookup and GET
                          ?action=hubspot-engagements&contact_id=... — the one HubSpot read
@@ -85,7 +92,7 @@ src/
   main.jsx, App.jsx        entry + router + layout (App.jsx also mounts NameTagProvider)
   components/               shared UI, used by 2+ modules
     KpiRow, FunnelChart, DataTable, PeriodToggle, StatusPill, AsyncState,
-    TopNav, Overlay, Modal, Drawer, NameTagModal
+    Sidebar, Overlay, Modal, Drawer, LoginPage, DataTable, AsyncState
   modules/
     abm/        AbmPage, LeadTable, useAbmData (includes useAllAbmData — see below)
     pipeline/   PipelinePage, KanbanBoard/Column, LeadCard, PipelineTable,
@@ -99,15 +106,20 @@ src/
                 useDemoCallsMutations, useLiveDemoCallContacts, constants.js
   hooks/
     useApiData      generic {data, loading, error, refresh} fetch, cached +
-                    stale-while-revalidate, 5min background poll — read-only
+                    stale-while-revalidate, 5min background poll — read-only.
+                    Keeps one shared record per URL, so several components
+                    asking for the same data share one request and one poll,
+                    and polling pauses while the tab is hidden.
     useApiMutation  generic {mutate, loading, error} POST/PATCH wrapper — the
                     app's mutation primitive, used by the pipeline and demo-calls modules
     useTheme        light/dark toggle, persisted to localStorage
-    useNameTag      honor-system identity for pipeline/demo-calls attribution,
-                    persisted to localStorage
+    useSidebar      sidebar collapse state, persisted to localStorage
   context/
-    NameTagContext.jsx  ensureName() gate — prompts once via NameTagModal if
-                        no name is stored yet, mounted at the app root
+    AuthContext.jsx     session status from GET /api/auth; nothing that reads
+                        real data mounts until it reports authenticated
+    NameTagContext.jsx  ensureName() display-name accessor, sourced from
+                        AuthContext — kept as its own context so the ~15 call
+                        sites that predate login didn't have to change
   lib/
     apiCache.js             sessionStorage read/write used by useApiData (and
                             useAllAbmData) for the stale-while-revalidate cache
@@ -137,7 +149,7 @@ For a typical **read-only HubSpot** module:
    from `KpiRow` / `FunnelChart` / `DataTable` — you shouldn't need new CSS
    or new chart code for a typical metrics-and-table module.
 3. Register the route in `src/App.jsx` and add a nav entry in
-   `src/components/TopNav.jsx`'s `MODULES` array.
+   `src/components/Sidebar.jsx`'s `MODULES` array.
 
 For a **database-backed, writable** module (Sales Pipeline and Demo Calls
 are the two so far), follow the pattern in `lib/pipeline/` + `api/pipeline/**`
@@ -224,11 +236,13 @@ was dropped, not extended.
   place ABM/Marketing code touches pipeline data (a bulk `hubspot_contact_id`
   check, so an already-added lead shows an "In Pipeline" badge instead of a
   duplicate-add button).
-- **Attribution without login**: the whole app has no authentication.
-  Pipeline writes are attributed by a name typed once into
-  `NameTagModal`/`NameTagContext` and stored in `localStorage` — an honor
-  system, not access control. Anyone with the dashboard URL can create/edit
-  pipeline leads, same as they can already view everything else.
+- **Attribution comes from the session, not the client**: the app is behind
+  Google sign-in restricted to `@heizen.work` (`api/auth/index.js`,
+  `middleware.js`). Writes record the signed-in account, resolved
+  server-side by `requireActor()` in `lib/auth/actor.js` — the request body
+  has no say in who an edit is recorded as. `NameTagContext` still exists as
+  the display-name accessor, but it now reads from `AuthContext` rather than
+  from a name typed into `localStorage`.
 - **Hard delete exists, gated by a server-enforced confirmation**: `DELETE
   /api/pipeline/:id` requires `confirm_company_name` to exactly match the
   lead's current company name (checked server-side, not just in the UI) —
@@ -279,7 +293,7 @@ the rest of the app having no scheduled sync.
 - **"Add to pipeline"**: `demoCallLeadToPipelinePrefill()`
   (`src/lib/pipelineIntegration.js`) is the same snapshot-copy pattern as
   ABM/Marketing's bridge (`source: "Demo Call"`, `source_locked: true`), but
-  the frontend also calls `POST /api/demo-calls/:id/link-pipeline`
+  the frontend also calls `POST /api/demo-calls/:id?action=link-pipeline`
   afterward to record `pipeline_lead_id` back on the Demo Calls row — this
   works even for manually-entered leads with no `hubspot_contact_id`, since
   the link is keyed by the Demo Calls row id, not a HubSpot id.
@@ -355,13 +369,46 @@ module" above) — channel-attribution data from contacts and true
 per-campaign data from the Campaigns API answer different questions and
 don't need to replace each other.
 
+## Authentication
+
+Google Sign-In, restricted to `@heizen.work`. Three pieces:
+
+- **`api/auth/index.js`** issues and clears the session. It verifies the
+  Google ID token server-side via `google-auth-library` (signature, audience,
+  issuer), then requires *both* `email_verified` and an `hd` claim matching
+  the allowed domain. `hd` is the claim that actually proves a Workspace
+  account — an email suffix alone can belong to a consumer account — so the
+  suffix check is a second gate, not the only one.
+
+- **`middleware.js`** (Edge Middleware, not a serverless function, so it
+  doesn't count against the 12-function cap) gates every `/api/*` request on
+  the signed cookie and re-checks the domain rule on each one. The cookie
+  lasts 30 days and there is no server-side session store to revoke against,
+  so re-checking is what makes losing access take effect before the cookie
+  expires. `/api/auth` is exempt by path, matched on the segment so a future
+  `/api/authz` can't inherit the exemption.
+
+- **`lib/auth/actor.js`** answers "who is making this write". Handlers call
+  `requireActor(req)`, which re-verifies the same cookie, rather than reading
+  an `actor` field from the request body — attribution the client can choose
+  isn't attribution. Verifying twice per request is deliberate: it costs one
+  HMAC over ~100 bytes and means the audit trail holds even if the middleware
+  is ever misconfigured.
+
+The session cookie is HMAC-SHA256 over a JSON payload, implemented with Web
+Crypto (`lib/auth/session.js`) because that's the one API available in both
+the Edge and Node runtimes. `SESSION_SECRET` is required; `verifySession`
+returns null without it rather than throwing.
+
 ## Known, accepted risks
 
-- **`react-router-dom@7.18.1`** (latest) has an open advisory for an
-  "RSC Mode CSRF" issue. This app is plain client-side rendering — no React
-  Server Components, no SSR — so the vulnerable code path isn't reachable.
-  Re-check `npm audit` next time you upgrade dependencies.
-- **Vite's dev server** has a known moderate advisory (any site can read
+- ~~`react-router-dom@7.18.1` "RSC Mode CSRF" advisory~~ — **resolved**.
+  Fixed in 7.18.2, a patch bump, applied via `npm audit fix`. (The
+  reasoning that the path was unreachable here still held, but there was no
+  longer any cost to taking the fix.)
+- **Vite's dev server** has a known moderate advisory (clearing it requires
+  vite@8, a major upgrade, and is worth doing deliberately rather than as a
+  side effect) (any site can read
   responses from the local dev server). This only matters if the dev server
   is exposed beyond localhost, which it isn't in normal use (`vercel dev`
   binds to localhost).
@@ -389,6 +436,18 @@ Two things make repeat loads fast without changing what data is fetched:
   the background and silently updates the screen when it resolves. This is
   what makes a browser refresh feel instant instead of re-paying every
   HubSpot round-trip from zero.
+- **One request per URL, not per component.** `useApiData` keeps a shared
+  record per URL, so several components asking for the same data share a
+  single in-flight request and a single background poll. This matters most
+  on the Meetings page, which reads ABM and Lead Sources data to detect
+  untracked contacts: without sharing, opening it re-ran
+  `/api/sources?period=lifetime` — a full-portal contact scan — and visiting
+  ABM Outreach afterwards ran the whole thing again. Polling also pauses
+  while the tab is hidden, so a backgrounded tab stops spending HubSpot's
+  account-wide rate limit on data nobody is looking at.
+- **Route-level code splitting.** `App.jsx` lazy-loads each page, so the
+  initial download carries the shell and the current route rather than every
+  module's modals and charts.
 - **The "Overall ABM Effort" totals are computed client-side**, not by a
   dedicated `/api/abm/overview` endpoint. An earlier version had one, and it
   rebuilt every segment's full data server-side on every request — which

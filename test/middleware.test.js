@@ -71,7 +71,18 @@ describe("gating", () => {
 
   it("401s a tampered cookie", async () => {
     const cookie = await cookieFor();
-    const tampered = cookie.replace(/.$/, "x");
+
+    // Tamper the *first* character of the signature, not the last. The
+    // signature is 32 bytes encoded in 43 base64url characters — 258 bits of
+    // alphabet for 256 bits of data — so the final character's low 4 bits
+    // decode to nothing, and several distinct last characters yield byte-for-
+    // byte identical signatures. Mutating it therefore only *sometimes*
+    // invalidates the cookie, which makes for a test that passes ~15 runs out
+    // of 16. The first character has no such slack.
+    const [value, sig] = cookie.split(".");
+    const tampered = `${value}.${sig[0] === "A" ? "B" : "A"}${sig.slice(1)}`;
+    expect(tampered).not.toBe(cookie);
+
     expect((await middleware(request("/api/pipeline", tampered))).status).toBe(401);
   });
 

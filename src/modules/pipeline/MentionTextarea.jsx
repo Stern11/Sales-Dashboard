@@ -5,7 +5,9 @@ import { TEAM_DIRECTORY } from "./team.js";
 // A raw email typed after "@" (e.g. "@newperson@company.com") is the escape
 // hatch for tagging someone who isn't in TEAM_DIRECTORY — this just needs to
 // look enough like an email to be worth offering as a suggestion; the
-// backend does the real validation (see api/pipeline/[id]/notes.js).
+// backend does the real validation (see handleAddNote in
+// api/pipeline/[id]/index.js, which also restricts recipients to the
+// allowed sign-in domain).
 const LOOKS_LIKE_EMAIL = /^\S+@\S+\.\S+$/;
 
 // Finds the "@word" run touching the cursor, if any — must start at a word
