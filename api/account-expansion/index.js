@@ -75,8 +75,13 @@ async function handleDeleteAccount(req, res, id) {
 
 async function handleGetDetail(req, res, id) {
   await withDbErrorHandling(res, async () => {
-    await requireAccount(id);
-    return getAccountDetail(id);
+    // getAccountDetail already fetches the account (concurrently with its
+    // five child queries) and returns null for it when there's no such row,
+    // so calling requireAccount first was a second identical SELECT on every
+    // drawer open — 7 round trips where 6 do.
+    const detail = await getAccountDetail(id);
+    if (!detail.account) throw new NotFoundError("No account expansion record with that id.");
+    return detail;
   });
 }
 

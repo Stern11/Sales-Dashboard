@@ -104,6 +104,8 @@ create unique index demo_call_leads_hubspot_contact_id_uq
 
 create index demo_call_leads_status_idx on demo_call_leads (status);
 create index demo_call_leads_updated_at_idx on demo_call_leads (updated_at desc);
+-- listLeads() sorts on created_at, not updated_at (see migration 0014).
+create index demo_call_leads_created_at_idx on demo_call_leads (created_at desc);
 create index demo_call_leads_pipeline_lead_id_idx
   on demo_call_leads (pipeline_lead_id) where pipeline_lead_id is not null;
 
@@ -154,6 +156,9 @@ create table account_expansion (
   created_at             timestamptz not null default now(),
   updated_at             timestamptz not null default now()
 );
+
+-- listAccounts() sorts on updated_at (see migration 0014).
+create index account_expansion_updated_at_idx on account_expansion (updated_at desc);
 
 create unique index account_expansion_hubspot_company_id_uq
   on account_expansion (hubspot_company_id);
@@ -266,3 +271,5 @@ create index account_expansion_questions_account_id_idx on account_expansion_que
 --   0013 (2026-08-14): demo_call_logs (lead_id, call_number) made unique; renumbers
 --                      any duplicates the old addCall() race produced, and drops the
 --                      now-redundant non-unique index on the same columns
+--   0014 (2026-08-14): indexes matching the demo-calls and account-expansion list
+--                      endpoints' actual ORDER BY columns

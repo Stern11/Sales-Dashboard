@@ -15,7 +15,7 @@
 
 import { getToken } from "../../lib/hubspot.js";
 import { withHubspotErrorHandling } from "../../lib/respond.js";
-import { buildAbmPayload, getLifecycleStages } from "../../lib/abm.js";
+import { buildAbmPayload } from "../../lib/abm.js";
 import { findSegment } from "../../lib/abm-segments/index.js";
 
 export default async function handler(req, res) {
@@ -36,7 +36,8 @@ export default async function handler(req, res) {
 
   await withHubspotErrorHandling(res, async () => {
     const token = getToken();
-    const stages = await getLifecycleStages(token);
-    return buildAbmPayload(token, segment, stages);
+    // buildAbmPayload fetches the lifecycle stages itself, concurrently with
+    // the contacts and associations it needs anyway.
+    return buildAbmPayload(token, segment);
   });
 }

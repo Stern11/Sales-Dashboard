@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { AsyncState } from "../../components/AsyncState.jsx";
 import { KpiRow } from "../../components/KpiRow.jsx";
 import { FunnelChart } from "../../components/FunnelChart.jsx";
@@ -34,25 +34,46 @@ export function MarketingPage() {
     return data.leads.filter((l) => l.channel.toLowerCase() === AD_CHANNEL);
   }, [data]);
 
+  // Stage value -> position, built once per data change. Every count below
+  // needs "how far along is this lead", and resolving that with findIndex
+  // inside a filter made each one O(leads x stages); the funnel did it once
+  // per stage on top of that. A Map makes each lookup O(1).
+  const stageOrder = useMemo(() => {
+    const order = new Map();
+    (data?.stages || []).forEach((s, i) => order.set(s.value, i));
+    return order;
+  }, [data]);
+
+  const stageIdx = useCallback((value) => (stageOrder.has(value) ? stageOrder.get(value) : -1), [stageOrder]);
+
   const funnel = useMemo(() => {
     if (!data) return [];
-    const stageIndex = (value) => data.stages.findIndex((s) => s.value === value);
     return data.stages.map((s, i) => ({
       stage: s.label,
-      count: adLeads.filter((l) => stageIndex(l.lifecycle_stage) >= i).length,
+      count: adLeads.filter((l) => stageIdx(l.lifecycle_stage) >= i).length,
     }));
-  }, [data, adLeads]);
+  }, [data, adLeads, stageIdx]);
 
   // Cumulative — reached this stage or any stage beyond it — not just
   // currently sitting there. A lead that did a demo call and has since moved
   // on to SQL still counts toward "Demo Calls"; lifecyclestage only holds
   // the *current* stage, so counting exact matches undercounts total
   // activity by however many leads have since progressed further.
-  const stageIdx = (value) => data?.stages.findIndex((s) => s.value === value) ?? -1;
-  const demoCallIdx = stageIdx("opportunity");
-  const sqlIdx = stageIdx("salesqualifiedlead");
-  const demoCallCount = demoCallIdx >= 0 ? adLeads.filter((l) => stageIdx(l.lifecycle_stage) >= demoCallIdx).length : 0;
-  const sqlCount = sqlIdx >= 0 ? adLeads.filter((l) => stageIdx(l.lifecycle_stage) >= sqlIdx).length : 0;
+  //
+  // Memoized: these ran twice over every ad lead on every render, including
+  // renders caused by typing in the table's search box.
+  const { demoCallCount, sqlCount } = useMemo(() => {
+    const demoCallIdx = stageIdx("opportunity");
+    const sqlIdx = stageIdx("salesqualifiedlead");
+    let demo = 0;
+    let sql = 0;
+    for (const l of adLeads) {
+      const idx = stageIdx(l.lifecycle_stage);
+      if (demoCallIdx >= 0 && idx >= demoCallIdx) demo += 1;
+      if (sqlIdx >= 0 && idx >= sqlIdx) sql += 1;
+    }
+    return { demoCallCount: demo, sqlCount: sql };
+  }, [adLeads, stageIdx]);
 
   const contactIds = useMemo(() => adLeads.map((l) => l.contact_id), [adLeads]);
   const { inPipeline, refresh: refreshPipelineCheck } = usePipelineCheck(contactIds);

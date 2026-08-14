@@ -3,7 +3,7 @@
 // needs lives here so AbmPage/MarketingPage don't reach into
 // src/modules/pipeline/ internals directly.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { REFRESH_MS } from "../hooks/useApiData.js";
 import { readCache, writeCache } from "./apiCache.js";
 
@@ -19,9 +19,42 @@ import { readCache, writeCache } from "./apiCache.js";
  * (sessionStorage-cached instant paint + background revalidate + a
  * REFRESH_MS poll) since that behavior is still wanted here, just over POST.
  */
+/**
+ * A short, stable key for a list of ids.
+ *
+ * Joining ~2,000 ids produced a multi-kilobyte sessionStorage key. A cheap
+ * non-cryptographic digest (FNV-1a) keeps it constant-length; the count is
+ * kept alongside it so two different sets can't collide silently on length
+ * alone. This key never leaves the browser and guards a best-effort badge
+ * cache, so a digest is the right tool rather than something stronger.
+ */
+function cacheKeyFor(sortedIds) {
+  let hash = 0x811c9dc5;
+  for (const id of sortedIds) {
+    for (let i = 0; i < id.length; i++) {
+      hash ^= id.charCodeAt(i);
+      hash = Math.imul(hash, 0x01000193) >>> 0;
+    }
+    hash ^= 0x2c; // separator, so ["ab","c"] and ["a","bc"] differ
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return `${sortedIds.length}-${hash.toString(36)}`;
+}
+
 export function usePipelineCheck(contactIds) {
-  const ids = [...new Set((contactIds || []).filter(Boolean).map(String))];
-  const key = ids.length ? `pipeline-check:${ids.join(",")}` : null;
+  // Memoized because Marketing's "Lifetime" view passes ~2,000 ids: without
+  // this, every render rebuilt a Set, deduped the whole list and allocated a
+  // ~20KB joined string — which is also used as a sessionStorage key, so the
+  // cost landed on the render path twice over.
+  const { ids, key } = useMemo(() => {
+    const deduped = [...new Set((contactIds || []).filter(Boolean).map(String))];
+    // Sorted so the same set of contacts arriving in a different order
+    // (which happens whenever a table re-sorts) is recognized as the same
+    // cache entry instead of missing and refetching.
+    const sorted = [...deduped].sort();
+    return { ids: deduped, key: sorted.length ? `pipeline-check:${cacheKeyFor(sorted)}` : null };
+  }, [contactIds]);
+
   const [inPipeline, setInPipeline] = useState(() => (key && readCache(key)) || {});
   const requestId = useRef(0);
 

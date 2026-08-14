@@ -17,35 +17,48 @@
 // check them against. Re-verify before trusting the numbers once this stops
 // throwing a scope error.
 
-import { getToken, hubspotGet } from "../../lib/hubspot.js";
+import { getToken, hubspotGet, mapWithConcurrency } from "../../lib/hubspot.js";
 import { withHubspotErrorHandling } from "../../lib/respond.js";
 
 async function buildSpendPayload(token) {
   const campaignList = await hubspotGet(token, "/marketing/v3/campaigns?limit=100");
   const campaigns = campaignList.results || [];
 
-  let totalSpend = 0;
-  let liveCampaigns = 0;
-  const campaignsOut = [];
-  for (const c of campaigns) {
+  // One budget-items request per campaign, run a few at a time instead of
+  // strictly one after another. Serially this was up to 101 sequential
+  // round trips against a 30s function limit (vercel.json), which on a
+  // portal with a full campaign list would time out before returning
+  // anything. The concurrency cap keeps it well inside HubSpot's per-second
+  // limit, which is shared across the whole account.
+  const campaignsOut = await mapWithConcurrency(campaigns, 5, async (c) => {
     const status = String(c.status || c.properties?.hs_campaign_status || "UNKNOWN").toUpperCase();
-    if (status === "ACTIVE" || status === "LIVE" || status === "IN_PROGRESS") liveCampaigns += 1;
 
     let spend = 0;
+    let spendAvailable = true;
     try {
       const budget = await hubspotGet(token, `/marketing/v3/campaigns/${c.id}/budget-items`);
       spend = (budget.results || []).reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-    } catch {
-      spend = 0; // budget-items missing/unavailable for this campaign — don't fail the whole page over one campaign
+    } catch (err) {
+      // Don't fail the whole page over one campaign — but don't silently
+      // report $0 either. A bare `spend = 0` here made a rate-limited or
+      // scope-denied response indistinguishable from a campaign that
+      // genuinely spent nothing.
+      spendAvailable = false;
+      console.error(`budget-items unavailable for campaign ${c.id}:`, err.message);
     }
-    totalSpend += spend;
-    campaignsOut.push({ id: c.id, name: c.name || "(unnamed campaign)", status, spend });
-  }
+
+    return { id: c.id, name: c.name || "(unnamed campaign)", status, spend, spend_available: spendAvailable };
+  });
+
+  const isLive = (status) => status === "ACTIVE" || status === "LIVE" || status === "IN_PROGRESS";
 
   return {
-    total_spend: totalSpend,
-    live_campaigns: liveCampaigns,
+    total_spend: campaignsOut.reduce((sum, c) => sum + c.spend, 0),
+    live_campaigns: campaignsOut.filter((c) => isLive(c.status)).length,
     total_campaigns: campaignsOut.length,
+    // So the UI can say "spend is partial" rather than presenting an
+    // understated total as complete.
+    spend_partial: campaignsOut.some((c) => !c.spend_available),
     campaigns: campaignsOut,
   };
 }

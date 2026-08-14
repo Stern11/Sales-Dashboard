@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext } from "react";
+import { createContext, useCallback, useContext, useMemo } from "react";
 import { useAuthContext } from "./AuthContext.jsx";
 
 const NameTagContext = createContext(null);
@@ -23,8 +23,13 @@ export function NameTagProvider({ children }) {
 
   const ensureName = useCallback(() => Promise.resolve(actor), [actor]);
 
+  // Memoized: this provider wraps the entire dashboard shell (App.jsx), and
+  // ~15 components consume it just to read a name — a fresh object each
+  // render re-rendered all of them for nothing.
+  const value = useMemo(() => ({ name: actor, ensureName }), [actor, ensureName]);
+
   return (
-    <NameTagContext.Provider value={{ name: actor, ensureName }}>
+    <NameTagContext.Provider value={value}>
       {children}
     </NameTagContext.Provider>
   );

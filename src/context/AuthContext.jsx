@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { onSessionExpired } from "../lib/sessionExpired.js";
 
 const AuthContext = createContext(null);
@@ -35,8 +35,12 @@ export function AuthProvider({ children }) {
     setState({ loading: false, authenticated: false, name: null, email: null });
   }, []);
 
+  // Memoized: a new object here re-renders every consumer on every render of
+  // this provider, and it wraps the entire app.
+  const value = useMemo(() => ({ ...state, refresh, logout }), [state, refresh, logout]);
+
   return (
-    <AuthContext.Provider value={{ ...state, refresh, logout }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

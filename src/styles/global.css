@@ -184,6 +184,21 @@ a.li-link:hover { text-decoration: underline; }
 .mini-badge.pill-stage { background: var(--pill-stage-bg); color: var(--pill-stage-text); }
 .flag-icon { color: var(--status-warning); font-weight: 700; margin-right: 3px; cursor: help; }
 .row-count { font-size: 11.5px; color: var(--text-muted); margin-top: 8px; }
+
+/* "Show all N" next to the row count — a link, not a button, since it sits
+   inline in a sentence about the count rather than acting as a control in
+   its own right. */
+.btn-link-inline {
+  background: none;
+  border: 0;
+  padding: 0;
+  margin-left: 8px;
+  font: inherit;
+  color: var(--seq-450);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.btn-link-inline:hover { color: var(--seq-550, var(--seq-450)); }
 .table-scroll { max-height: 560px; overflow: auto; border-radius: 10px; }
 .table-scroll table { border-radius: 0; }
 .table-scroll thead th { position: sticky; top: 0; z-index: 2; }
