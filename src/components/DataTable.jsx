@@ -1,4 +1,4 @@
-import { memo, useDeferredValue, useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 
 // One collator, built once. String#localeCompare constructs (or looks up) an
 // ICU collator on every call, so using it as a sort comparator meant tens of

@@ -84,7 +84,6 @@ export function usePipelineCheck(contactIds) {
     load();
     const timer = setInterval(load, REFRESH_MS);
     return () => clearInterval(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, load]);
 
   return { inPipeline, refresh: load };

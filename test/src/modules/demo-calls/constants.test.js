@@ -4,7 +4,6 @@ import {
   OUTCOME_OPTIONS, outcomeMeta, isFutureCallDate, outcomeOptionsFor,
   STATUS_OPTIONS, statusMeta, effectiveStatus, summarizeLeads,
   FUNNEL_TREND_SERIES, weeklyFunnelTrend, bookedDateOf, MIN_TREND_WEEK_START,
-  COMPANY_SCALE_OPTIONS,
 } from "../../../../src/modules/demo-calls/constants.js";
 import { summarize as serverSummarize } from "../../../../lib/demo-calls/queries.js";
 
