@@ -4,7 +4,7 @@ import {
   OUTCOME_OPTIONS, outcomeMeta, isFutureCallDate, outcomeOptionsFor,
   STATUS_OPTIONS, statusMeta, effectiveStatus, summarizeLeads,
   FUNNEL_TREND_SERIES, weeklyFunnelTrend, bookedDateOf, MIN_TREND_WEEK_START,
-  COMPANY_SCALE_OPTIONS, scaleLabel,
+  COMPANY_SCALE_OPTIONS,
 } from "../../../../src/modules/demo-calls/constants.js";
 import { summarize as serverSummarize } from "../../../../lib/demo-calls/queries.js";
 
@@ -165,16 +165,6 @@ describe("summarizeLeads", () => {
     expect(s.by_scale.mid_market).toBe(1);
     expect(s.by_scale.enterprise).toBe(1);
     expect(s.by_scale.startup).toBe(1);
-  });
-});
-
-describe("COMPANY_SCALE_OPTIONS / scaleLabel", () => {
-  it("returns the matching label for every known value", () => {
-    for (const o of COMPANY_SCALE_OPTIONS) expect(scaleLabel(o.value)).toBe(o.label);
-  });
-  it("falls back to an em-dash for an unset/unknown value", () => {
-    expect(scaleLabel(null)).toBe("—");
-    expect(scaleLabel("bogus")).toBe("—");
   });
 });
 

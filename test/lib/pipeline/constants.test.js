@@ -40,6 +40,14 @@ describe("isValidCompanyScale", () => {
     expect(isValidCompanyScale("smb")).toBe(true);
     expect(isValidCompanyScale("giant")).toBe(false);
   });
+
+  // Pipeline and Demo Calls each exported an isValidCompanyScale that
+  // disagreed on exactly this input — same name, same apparent job,
+  // different answer. They share one implementation now (lib/companyScale.js);
+  // this pins the contract so they can't drift apart again.
+  it('treats "" as "not specified", same as null', () => {
+    expect(isValidCompanyScale("")).toBe(true);
+  });
 });
 
 describe("isValidPriority", () => {

@@ -73,7 +73,6 @@ export function questionPriorityMeta(value) {
 }
 
 /** dateStr is a plain "YYYY-MM-DD" string — same local-midnight parsing as src/modules/demo-calls/constants.js's formatCallDate, for the same reason (avoids the UTC-string-parsing day-early bug). */
-export function formatShortDate(dateStr) {
-  if (!dateStr) return null;
-  return new Date(`${dateStr}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
-}
+
+// Shared with the other modules — see src/lib/datetime.js.
+export { formatShortDate } from "../../lib/datetime.js";

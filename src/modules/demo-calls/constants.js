@@ -77,10 +77,6 @@ export const COMPANY_SCALE_OPTIONS = [
   { value: "enterprise", label: "Enterprise (1000+)" },
 ];
 
-export function scaleLabel(value) {
-  return COMPANY_SCALE_OPTIONS.find((o) => o.value === value)?.label || "—";
-}
-
 // Mirrors lib/demo-calls/constants.js — where a manually-entered lead
 // actually came from, same dropdown-plus-"Other" pattern as Sales Pipeline's
 // own SOURCE_CATEGORIES (src/modules/pipeline/constants.js). Only relevant
@@ -88,7 +84,6 @@ export function scaleLabel(value) {
 // origin captured by hubspot_origin_module (which view surfaced it).
 export const SOURCE_CATEGORIES = ["Website Inbound", "Referral", "ABM", "Event", "Ads", "Partner", "Demo Call"];
 export const SOURCE_OTHER = "Other";
-export const SOURCE_PRESETS = [...SOURCE_CATEGORIES, SOURCE_OTHER];
 
 /**
  * `dateStr` is a plain "YYYY-MM-DD" string (see call_date::text in
@@ -103,10 +98,6 @@ export function formatCallDate(dateStr) {
 }
 
 /** Same parsing as formatCallDate(), compact — for table cells rather than a detail page. */
-export function formatShortDate(dateStr) {
-  if (!dateStr) return null;
-  return new Date(`${dateStr}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
-}
 
 /**
  * The date a lead's meeting was actually booked for — the real source of
@@ -301,15 +292,5 @@ export function isWithinRange(isoString, from, to) {
   return true;
 }
 
-export function relativeTime(isoString) {
-  if (!isoString) return "—";
-  const diffMs = Date.now() - new Date(isoString).getTime();
-  const mins = Math.round(diffMs / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.round(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.round(hrs / 24);
-  if (days < 30) return `${days}d ago`;
-  return new Date(isoString).toLocaleDateString();
-}
+// Shared with the other modules — see src/lib/datetime.js.
+export { relativeTime, formatShortDate } from "../../lib/datetime.js";

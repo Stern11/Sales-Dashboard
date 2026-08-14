@@ -3,16 +3,21 @@
 // stage/scale/source is a one-file-per-side change; see db/schema.sql.
 
 export const STAGES = [
-  { value: "sql", label: "SQL", isActive: true, isTerminal: false, pillVariant: "notstarted", color: "var(--stage-sql)" },
-  { value: "discovery", label: "Discovery", isActive: true, isTerminal: false, pillVariant: "stage", color: "var(--stage-discovery)" },
-  { value: "proposal", label: "Proposal", isActive: true, isTerminal: false, pillVariant: "stage", color: "var(--stage-proposal)" },
-  { value: "commercial", label: "Commercial", isActive: true, isTerminal: false, pillVariant: "stage", color: "var(--stage-commercial)" },
-  { value: "won", label: "Won", isActive: true, isTerminal: true, pillVariant: "ready", color: "var(--stage-won)" },
-  { value: "cold", label: "Cold", isActive: false, isTerminal: false, pillVariant: "cold", color: "var(--stage-cold)" },
-  { value: "lost", label: "Lost", isActive: false, isTerminal: true, pillVariant: "lost", color: "var(--stage-lost)" },
+  { value: "sql", label: "SQL", isActive: true, pillVariant: "notstarted", color: "var(--stage-sql)" },
+  { value: "discovery", label: "Discovery", isActive: true, pillVariant: "stage", color: "var(--stage-discovery)" },
+  { value: "proposal", label: "Proposal", isActive: true, pillVariant: "stage", color: "var(--stage-proposal)" },
+  { value: "commercial", label: "Commercial", isActive: true, pillVariant: "stage", color: "var(--stage-commercial)" },
+  { value: "won", label: "Won", isActive: true, pillVariant: "ready", color: "var(--stage-won)" },
+  { value: "cold", label: "Cold", isActive: false, pillVariant: "cold", color: "var(--stage-cold)" },
+  { value: "lost", label: "Lost", isActive: false, pillVariant: "lost", color: "var(--stage-lost)" },
 ];
 
-export const BOARD_STAGES = STAGES; // all 7 shown as columns in v1 (see plan's open-risk note on cold/lost column treatment)
+// Named separately from STAGES because the board's column set is a display
+// decision, not the same thing as the list of stages a lead can be in —
+// KanbanBoard splits it into active columns and the collapsed Cold/Lost
+// side-states. (The original comment claimed all 7 are shown as columns;
+// KanbanBoard has not done that since it gained the collapse behavior.)
+export const BOARD_STAGES = STAGES;
 export const ACTIVE_STAGES = STAGES.filter((s) => s.isActive);
 
 export function stageMeta(value) {
@@ -41,10 +46,6 @@ export const COMPANY_SCALE_OPTIONS = [
   { value: "enterprise", label: "Enterprise (1000+)" },
 ];
 
-export function scaleLabel(value) {
-  return COMPANY_SCALE_OPTIONS.find((o) => o.value === value)?.label || "—";
-}
-
 export const PRIORITY_OPTIONS = [
   { value: "high", label: "P0", formLabel: "P0 — High", pillVariant: "lost" },
   { value: "medium", label: "P1", formLabel: "P1 — Medium", pillVariant: "stage" },
@@ -61,7 +62,6 @@ export function priorityMeta(value) {
 // box this drives.
 export const SOURCE_CATEGORIES = ["ABM", "Event", "Ads", "Partner", "Referral", "Demo Call"];
 export const SOURCE_OTHER = "Other";
-export const SOURCE_PRESETS = [...SOURCE_CATEGORIES, SOURCE_OTHER];
 
 // Same dropdown-plus-Other pattern as source. Optional — a lead can have no
 // region set yet.
@@ -80,15 +80,5 @@ export function regionBucket(region) {
 
 export const currency = new Intl.NumberFormat(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 
-export function relativeTime(isoString) {
-  if (!isoString) return "—";
-  const diffMs = Date.now() - new Date(isoString).getTime();
-  const mins = Math.round(diffMs / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.round(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.round(hrs / 24);
-  if (days < 30) return `${days}d ago`;
-  return new Date(isoString).toLocaleDateString();
-}
+// Shared with the other modules — see src/lib/datetime.js.
+export { relativeTime } from "../../lib/datetime.js";

@@ -138,7 +138,6 @@
 }
 .stage-menu-list button:hover { background: var(--page-plane); }
 .stage-menu-list button.danger { color: var(--status-critical); }
-.stage-menu-list hr { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
 
 /* Lead detail drawer */
 .lead-detail-section { margin-bottom: 16px; }
