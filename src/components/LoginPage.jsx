@@ -68,7 +68,7 @@ export function LoginPage() {
   return (
     <div className="login-page">
       <div className="login-card">
-        <div className="login-badge">ES</div>
+        <img className="login-badge" src="/icon-96.png" alt="Heizen" width="52" height="52" />
         <div className="login-title">Executive Sales Dashboard</div>
         <p className="subtitle" style={{ marginBottom: 24 }}>
           Sign in with your Heizen Google account to continue.

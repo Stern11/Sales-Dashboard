@@ -219,11 +219,12 @@ a.li-link:hover { text-decoration: underline; }
 .login-card::before {
   content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--seq-450);
 }
+/* The source PNG (public/icon-96.png) already has its own square black
+   background baked in — clip it to a circle rather than fighting that with
+   a second background color behind it. */
 .login-badge {
-  width: 46px; height: 46px; margin: 0 auto 18px; border-radius: 50%;
-  background: var(--pill-stage-bg); color: var(--seq-450);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 17px; font-weight: 700; letter-spacing: 0.02em;
+  width: 52px; height: 52px; margin: 0 auto 18px; border-radius: 50%;
+  object-fit: cover; display: block;
 }
 .login-title { font-size: 20px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; }
 .login-footer-note { font-size: 11.5px; color: var(--text-muted); margin-top: 22px; }
