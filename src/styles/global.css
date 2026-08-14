@@ -207,10 +207,26 @@ a.li-link:hover { text-decoration: underline; }
 
 .login-page { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--page-plane); }
 .login-card {
-  background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px;
-  padding: 36px 40px; text-align: center; min-width: 320px;
+  position: relative; overflow: hidden;
+  background: var(--surface-1); border: 1px solid var(--border); border-radius: 14px;
+  padding: 40px 40px 32px; text-align: center; width: 360px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 16px 40px rgba(0, 0, 0, 0.10);
 }
-.login-title { font-size: 19px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; }
+/* Thin accent bar, not a decoration for its own sake — ties this page back
+   to the app's one accent color (--seq-450, already used for nav/buttons/
+   active states everywhere else) instead of reading as an unbranded, generic
+   auth screen. */
+.login-card::before {
+  content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--seq-450);
+}
+.login-badge {
+  width: 46px; height: 46px; margin: 0 auto 18px; border-radius: 50%;
+  background: var(--pill-stage-bg); color: var(--seq-450);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 17px; font-weight: 700; letter-spacing: 0.02em;
+}
+.login-title { font-size: 20px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; }
+.login-footer-note { font-size: 11.5px; color: var(--text-muted); margin-top: 22px; }
 
 @media (max-width: 900px) {
   .kpi-row { grid-template-columns: repeat(2, 1fr); }

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useAuthContext } from "../context/AuthContext.jsx";
+import { useTheme } from "../hooks/useTheme.js";
 
 /**
  * Shown in place of the whole app until AuthContext reports authenticated.
@@ -14,6 +15,7 @@ export function LoginPage() {
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const { refresh } = useAuthContext();
+  const { theme } = useTheme();
 
   useEffect(() => {
     let cancelled = false;
@@ -45,7 +47,11 @@ export function LoginPage() {
           client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
           callback: handleCredential,
         });
-        window.google.accounts.id.renderButton(buttonRef.current, { theme: "outline", size: "large", width: 280 });
+        window.google.accounts.id.renderButton(buttonRef.current, {
+          theme: theme === "dark" ? "filled_black" : "outline",
+          size: "large",
+          width: 280,
+        });
       } else {
         retryTimer = setTimeout(tryInit, 150);
       }
@@ -57,18 +63,20 @@ export function LoginPage() {
       if (retryTimer) clearTimeout(retryTimer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [theme]);
 
   return (
     <div className="login-page">
       <div className="login-card">
+        <div className="login-badge">ES</div>
         <div className="login-title">Executive Sales Dashboard</div>
-        <p className="subtitle" style={{ marginBottom: 20 }}>
+        <p className="subtitle" style={{ marginBottom: 24 }}>
           Sign in with your Heizen Google account to continue.
         </p>
-        <div ref={buttonRef} />
+        <div ref={buttonRef} style={{ display: "flex", justifyContent: "center" }} />
         {submitting && <p className="subtitle" style={{ marginTop: 12 }}>Signing in…</p>}
         {error && <p className="form-error" style={{ marginTop: 12 }}>{error}</p>}
+        <p className="login-footer-note">Access is restricted to @heizen.work accounts.</p>
       </div>
     </div>
   );
