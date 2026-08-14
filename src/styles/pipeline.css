@@ -160,6 +160,64 @@
 .lead-detail-danger-zone .btn { margin-left: 0; }
 .lead-detail-current-stage { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
 
+/* Account Expansion detail page — Summary strip (always visible), 3 tabs
+   (Footprint & Whitespace / Expansion Plan / Research & Questions) instead
+   of one long scroll, and the Whitespace chip row. */
+/* Plain label/value pairs, not a grid of bordered tiles — a box around
+   every single field, nested inside a box around the whole section, inside
+   a box around the whole card, reads as a spreadsheet of rectangles rather
+   than a page that's easy to scan. Whitespace + the label/value typographic
+   contrast below does the organizing instead; the one exception is the
+   top-level Summary strip, which gets a single hairline underneath it
+   (not a box around each field) to separate it from the tabs below. */
+.expansion-summary-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 16px 28px; margin-bottom: 20px; padding-bottom: 18px; border-bottom: 1px solid var(--border);
+}
+.expansion-footprint-view { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px 28px; }
+.expansion-summary-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-muted); margin-bottom: 4px; }
+.expansion-summary-value { font-size: 13px; color: var(--text-primary); }
+.chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip-button { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); background: var(--surface-1); border-radius: 20px; padding: 4px 10px 4px 12px; font-size: 12px; color: var(--text-primary); cursor: pointer; }
+.chip-button:hover { border-color: var(--seq-450); }
+.expansion-tab-panel { display: flex; flex-direction: column; gap: 16px; }
+
+/* On the drawer this page's sections used to live in, a card boundary was
+   unnecessary — the drawer panel itself (its own background + border,
+   floating over a dimmed overlay) already read as "one bounded surface".
+   Rendered directly on the page instead, .lead-detail-section has no such
+   surface under it, so every section blended into the page with no visible
+   edge. Scoped so this doesn't touch .lead-detail-section anywhere it's
+   still used inside an actual drawer (Pipeline/Demo Calls). Same card
+   language as .chart-card/.kpi elsewhere in the app, not a new style.
+   Every card gets the same accent-blue left edge — every tab had it read as
+   "missing" next to the one tab (Expansion Plan) that first had it, so this
+   is now the one consistent treatment rather than a per-tab color scheme. */
+.expansion-detail-page .lead-detail-section {
+  background: var(--surface-1); border: 1px solid var(--border); border-left: 3px solid var(--seq-450);
+  border-radius: 10px; padding: 16px 18px;
+}
+.expansion-detail-page .lead-detail-section h4 {
+  font-size: 13px; font-weight: 700; text-transform: none; letter-spacing: 0; color: var(--text-primary);
+}
+
+/* Compact "you can leave" link, not a button — the account name (not this
+   link) is the page's real subject, so the way back shouldn't outweigh it. */
+.expansion-back-link {
+  display: inline-flex; align-items: center; gap: 4px; color: var(--text-muted);
+  font-size: 12.5px; text-decoration: none; margin-bottom: 8px;
+}
+.expansion-back-link:hover { color: var(--seq-450); }
+.expansion-account-title { font-size: 21px; font-weight: 700; margin: 0 0 16px; color: var(--text-primary); }
+
+/* Best-effort: keeps native <select> popups in this theme's own light/dark
+   appearance instead of following the OS's regardless of what the page
+   looks like. :root already declares color-scheme (tokens.css) — restating
+   it directly on the control itself is what actually gets Safari on macOS
+   to honor it consistently for the popup menu, not just the closed control. */
+.form-grid select { color-scheme: light; }
+:root[data-theme="dark"] .form-grid select { color-scheme: dark; }
+
 /* Notes timeline — input form first (see NotesTimeline.jsx), thread below */
 .add-note-form { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
 /* MentionTextarea.jsx's <textarea> has no wrapping .form-grid, so it never

@@ -25,11 +25,13 @@ export function stageMeta(value) {
 export function summarizeLeads(leads) {
   const by_stage = Object.fromEntries(STAGES.map((s) => [s.value, 0]));
   let open_pipeline_value = 0;
+  let closed_won_value = 0;
   for (const lead of leads) {
     by_stage[lead.stage] = (by_stage[lead.stage] || 0) + 1;
     if (ACTIVE_STAGES.some((s) => s.value === lead.stage)) open_pipeline_value += Number(lead.deal_size) || 0;
+    if (lead.stage === "won") closed_won_value += Number(lead.deal_size) || 0;
   }
-  return { total: leads.length, by_stage, open_pipeline_value };
+  return { total: leads.length, by_stage, open_pipeline_value, closed_won_value };
 }
 
 export const COMPANY_SCALE_OPTIONS = [

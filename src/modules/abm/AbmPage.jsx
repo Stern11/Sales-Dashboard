@@ -3,7 +3,7 @@ import { AsyncState } from "../../components/AsyncState.jsx";
 import { KpiRow } from "../../components/KpiRow.jsx";
 import { FunnelChart } from "../../components/FunnelChart.jsx";
 import { PeriodToggle } from "../../components/PeriodToggle.jsx";
-import { PageMeta } from "../../components/TopNav.jsx";
+import { PageMeta } from "../../components/Sidebar.jsx";
 import { LeadTable } from "./LeadTable.jsx";
 import { useSegments, useAllAbmData } from "./useAbmData.js";
 import { usePipelineCheck, abmLeadToPipelinePrefill } from "../../lib/pipelineIntegration.js";

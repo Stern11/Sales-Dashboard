@@ -3,9 +3,9 @@ import { Modal } from "../../components/Modal.jsx";
 import { useDemoCallsMutations } from "./useDemoCallsMutations.js";
 import { useNameTagContext } from "../../context/NameTagContext.jsx";
 import { ImportFromHubspotPanel } from "./ImportFromHubspotPanel.jsx";
-import { outcomeOptionsFor, COMPANY_SCALE_OPTIONS } from "./constants.js";
+import { outcomeOptionsFor, COMPANY_SCALE_OPTIONS, SOURCE_CATEGORIES, SOURCE_OTHER } from "./constants.js";
 
-const EMPTY = { company_name: "", contact_name: "", email: "", phone: "", company_scale: "" };
+const EMPTY = { company_name: "", contact_name: "", email: "", phone: "", company_scale: "", source: "" };
 const NOT_LOGGED = "";
 
 /**
@@ -24,6 +24,12 @@ export function AddDemoCallLeadModal({ onClose, onCreated, prefill }) {
   const { createLead, addCall, loading } = useDemoCallsMutations();
   const { ensureName } = useNameTagContext();
   const locked = !!prefill;
+
+  // The dropdown shows one of the fixed categories, or "Other" whenever the
+  // current value isn't one of them (covers both "user picked Other and is
+  // typing" and a blank/never-chosen value) — same pattern as Sales
+  // Pipeline's LeadFieldsForm.jsx.
+  const sourceCategory = SOURCE_CATEGORIES.includes(values.source) ? values.source : SOURCE_OTHER;
 
   function patch(update) {
     setValues((v) => ({ ...v, ...update }));
@@ -48,6 +54,13 @@ export function AddDemoCallLeadModal({ onClose, onCreated, prefill }) {
     setFormError(null);
     if (!values.company_name.trim() || !values.contact_name.trim()) {
       setFormError("Company name and contact name are required.");
+      return;
+    }
+    // Source only applies to true manual entry — a locked/prefilled lead's
+    // origin is already captured by hubspot_origin_module (which live view
+    // surfaced it), so there's nothing for a rep to pick there.
+    if (!locked && !values.source.trim()) {
+      setFormError("Source is required.");
       return;
     }
     const actor = await ensureName();
@@ -131,6 +144,34 @@ export function AddDemoCallLeadModal({ onClose, onCreated, prefill }) {
             <input type="tel" value={values.phone} onChange={(e) => patch({ phone: e.target.value })} />
           </label>
         </div>
+        {!locked && (
+          <>
+            <label>
+              Source
+              <select
+                value={sourceCategory}
+                onChange={(e) => patch({ source: e.target.value === SOURCE_OTHER ? "" : e.target.value })}
+                required
+              >
+                <option value="" disabled hidden>— Select —</option>
+                {SOURCE_CATEGORIES.map((s) => <option key={s} value={s}>{s}</option>)}
+                <option value={SOURCE_OTHER}>{SOURCE_OTHER}</option>
+              </select>
+            </label>
+            {sourceCategory === SOURCE_OTHER && (
+              <label>
+                Where did this lead come from?
+                <input
+                  type="text"
+                  value={values.source}
+                  onChange={(e) => patch({ source: e.target.value })}
+                  placeholder="e.g. Cold outbound, trade show…"
+                  required
+                />
+              </label>
+            )}
+          </>
+        )}
         <label>
           Scale of company
           <select value={values.company_scale || ""} onChange={(e) => patch({ company_scale: e.target.value })}>

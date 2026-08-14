@@ -81,6 +81,15 @@ export function scaleLabel(value) {
   return COMPANY_SCALE_OPTIONS.find((o) => o.value === value)?.label || "—";
 }
 
+// Mirrors lib/demo-calls/constants.js — where a manually-entered lead
+// actually came from, same dropdown-plus-"Other" pattern as Sales Pipeline's
+// own SOURCE_CATEGORIES (src/modules/pipeline/constants.js). Only relevant
+// to manual entry — a lead detected live from HubSpot already has its
+// origin captured by hubspot_origin_module (which view surfaced it).
+export const SOURCE_CATEGORIES = ["Website Inbound", "Referral", "ABM", "Event", "Ads", "Partner", "Demo Call"];
+export const SOURCE_OTHER = "Other";
+export const SOURCE_PRESETS = [...SOURCE_CATEGORIES, SOURCE_OTHER];
+
 /**
  * `dateStr` is a plain "YYYY-MM-DD" string (see call_date::text in
  * lib/demo-calls/queries.js). Parsed with an explicit local-midnight time
@@ -91,6 +100,12 @@ export function scaleLabel(value) {
 export function formatCallDate(dateStr) {
   if (!dateStr) return null;
   return new Date(`${dateStr}T00:00:00`).toLocaleDateString(undefined, { weekday: "short", month: "long", day: "numeric", year: "numeric" });
+}
+
+/** Same parsing as formatCallDate(), compact — for table cells rather than a detail page. */
+export function formatShortDate(dateStr) {
+  if (!dateStr) return null;
+  return new Date(`${dateStr}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
 /**

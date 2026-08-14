@@ -59,6 +59,11 @@ describe("summarizeLeads", () => {
     const s = summarizeLeads([{ stage: "sql", deal_size: 100 }, { stage: "cold", deal_size: 999 }]);
     expect(s.open_pipeline_value).toBe(100);
   });
+
+  it("sums closed_won_value only for won-stage leads", () => {
+    const s = summarizeLeads([{ stage: "won", deal_size: 4000 }, { stage: "won", deal_size: 6000 }, { stage: "sql", deal_size: 999 }]);
+    expect(s.closed_won_value).toBe(10000);
+  });
 });
 
 describe("relativeTime", () => {

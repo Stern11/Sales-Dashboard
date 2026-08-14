@@ -1,11 +1,16 @@
 import { DataTable } from "../../components/DataTable.jsx";
 import { StatusPill } from "../../components/StatusPill.jsx";
-import { outcomeMeta, statusMeta, effectiveStatus } from "./constants.js";
+import { outcomeMeta, statusMeta, effectiveStatus, formatShortDate } from "./constants.js";
 
-const ORIGIN_LABEL = { abm: "ABM", marketing: "Marketing", manual: "Manual" };
+const ORIGIN_LABEL = { abm: "ABM", marketing: "Marketing" };
 
-function originLabel(value) {
-  return ORIGIN_LABEL[value] || "Manual";
+// A HubSpot-detected lead's origin is which live view surfaced it
+// (ABM/Marketing); a manually-entered lead's origin is whatever real source
+// the rep picked when adding it (see AddDemoCallLeadModal's Source field) —
+// "Manual" is only a fallback for a legacy row that predates that field.
+function sourceLabel(row) {
+  if (row.hubspot_origin_module) return ORIGIN_LABEL[row.hubspot_origin_module] || row.hubspot_origin_module;
+  return row.source || "Manual";
 }
 
 /**
@@ -40,11 +45,8 @@ function SelectCell({ row, selectedIds, onToggleSelect }) {
  * from the live contact. Neither is persisted just by appearing here — see
  * useLiveDemoCallContacts.js.
  */
-export function DemoCallsTable({ rows, onOpenLead, onLogFirstCall, selectedIds, onToggleSelect }) {
-  const originOptions = [...new Set(rows.map((r) => r.hubspot_origin_module || "manual"))].map((value) => ({
-    value,
-    label: originLabel(value),
-  }));
+export function DemoCallsTable({ rows, onOpenLead, onLogFirstCall, selectedIds, onToggleSelect, onRemove }) {
+  const originOptions = [...new Set(rows.map(sourceLabel))];
 
   return (
     <DataTable
@@ -66,7 +68,7 @@ export function DemoCallsTable({ rows, onOpenLead, onLogFirstCall, selectedIds, 
           ],
           getValue: (r) => (r._kind === "virtual" ? "not_logged" : effectiveStatus(r.status, r.last_call_outcome)),
         },
-        { key: "origin", label: "All sources", options: originOptions, getValue: (r) => r.hubspot_origin_module || "manual" },
+        { key: "origin", label: "All sources", options: originOptions, getValue: sourceLabel },
       ]}
       columns={[
         {
@@ -79,8 +81,8 @@ export function DemoCallsTable({ rows, onOpenLead, onLogFirstCall, selectedIds, 
         {
           key: "origin",
           label: "Source",
-          sortValue: (r) => originLabel(r.hubspot_origin_module || "manual"),
-          render: (r) => originLabel(r.hubspot_origin_module || "manual"),
+          sortValue: sourceLabel,
+          render: sourceLabel,
         },
         {
           key: "status",
@@ -88,7 +90,7 @@ export function DemoCallsTable({ rows, onOpenLead, onLogFirstCall, selectedIds, 
           sortValue: (r) => (r._kind === "virtual" ? "not_logged" : effectiveStatus(r.status, r.last_call_outcome)),
           render: (r) =>
             r._kind === "virtual"
-              ? <StatusPill variant="notstarted">Not logged — click to log first meeting</StatusPill>
+              ? <StatusPill variant="notstarted">Not Logged</StatusPill>
               : (() => {
                   const eff = effectiveStatus(r.status, r.last_call_outcome);
                   return <StatusPill variant={statusMeta(eff).pillVariant}>{statusMeta(eff).label}</StatusPill>;
@@ -101,14 +103,42 @@ export function DemoCallsTable({ rows, onOpenLead, onLogFirstCall, selectedIds, 
           render: (r) => (r._kind === "tracked" ? Number(r.call_count) || 0 : "—"),
         },
         {
+          // Renamed from "Last meeting" — that label paired with an outcome
+          // pill (Completed/No Show) read as a near-duplicate of the Status
+          // column right next to it. "Meeting Status" is what this actually
+          // is; the genuinely new, non-redundant "when" info (the date) gets
+          // its own column below.
           key: "last_call_outcome",
-          label: "Last meeting",
+          label: "Meeting Status",
           sortable: false,
           render: (r) =>
             r._kind === "tracked" && r.last_call_outcome
               ? <StatusPill variant={outcomeMeta(r.last_call_outcome).pillVariant}>{outcomeMeta(r.last_call_outcome).label}</StatusPill>
               : "—",
         },
+        {
+          key: "last_call_date",
+          label: "Last Meeting",
+          sortValue: (r) => r.last_call_date || "",
+          render: (r) => (r._kind === "tracked" && r.last_call_date ? formatShortDate(r.last_call_date) : "—"),
+        },
+        ...(onRemove ? [{
+          key: "remove",
+          label: "",
+          sortable: false,
+          render: (r) =>
+            r._kind === "tracked" ? (
+              <button
+                type="button"
+                className="icon-btn"
+                aria-label={`Remove ${r.company_name}`}
+                title="Remove this opportunity"
+                onClick={(e) => { e.stopPropagation(); onRemove(r); }}
+              >
+                ✕
+              </button>
+            ) : null,
+        }] : []),
       ]}
     />
   );

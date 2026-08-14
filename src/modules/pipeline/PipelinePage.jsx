@@ -4,7 +4,7 @@ import { AsyncState } from "../../components/AsyncState.jsx";
 import { KpiRow } from "../../components/KpiRow.jsx";
 import { FunnelChart } from "../../components/FunnelChart.jsx";
 import { PeriodToggle } from "../../components/PeriodToggle.jsx";
-import { PageMeta } from "../../components/TopNav.jsx";
+import { PageMeta } from "../../components/Sidebar.jsx";
 import { KanbanBoard } from "./KanbanBoard.jsx";
 import { PipelineTable } from "./PipelineTable.jsx";
 import { LeadDetailDrawer } from "./LeadDetailDrawer.jsx";

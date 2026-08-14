@@ -2,10 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { AsyncState } from "../../components/AsyncState.jsx";
 import { KpiRow } from "../../components/KpiRow.jsx";
-import { PageMeta } from "../../components/TopNav.jsx";
+import { PageMeta } from "../../components/Sidebar.jsx";
 import { DemoCallsTable } from "./DemoCallsTable.jsx";
 import { DemoCallLeadDrawer } from "./DemoCallLeadDrawer.jsx";
 import { AddDemoCallLeadModal } from "./AddDemoCallLeadModal.jsx";
+import { DeleteDemoCallLeadModal } from "./DeleteDemoCallLeadModal.jsx";
 import { DateRangeFilter } from "./DateRangeFilter.jsx";
 import { WeeklyTrendChart } from "./WeeklyTrendChart.jsx";
 import { useDemoCallsList } from "./useDemoCallsData.js";
@@ -55,6 +56,7 @@ export function DemoCallsPage() {
   const [bulkLoading, setBulkLoading] = useState(false);
   const [bulkStatus, setBulkStatus] = useState(null);
   const [kpiFilter, setKpiFilter] = useState(null);
+  const [removeTarget, setRemoveTarget] = useState(null);
 
   // A period switch changes which leads are even visible — drop any
   // selection made under the old filter rather than silently bulk-adding
@@ -256,6 +258,7 @@ export function DemoCallsPage() {
                 onLogFirstCall={openLogFirstCall}
                 selectedIds={selectedIds}
                 onToggleSelect={toggleSelect}
+                onRemove={setRemoveTarget}
               />
             </section>
             {/* Secondary — the table above is the primary view; this is here for
@@ -283,6 +286,17 @@ export function DemoCallsPage() {
           prefill={logCallPrefill}
           onClose={() => setLogCallPrefill(null)}
           onCreated={(lead) => { setLogCallPrefill(null); handleAddModalCreated(lead); }}
+        />
+      )}
+      {removeTarget && (
+        <DeleteDemoCallLeadModal
+          lead={removeTarget}
+          onClose={() => setRemoveTarget(null)}
+          onDeleted={() => {
+            setRemoveTarget(null);
+            if (selectedLeadId === removeTarget.id) selectLead(null);
+            refresh();
+          }}
         />
       )}
     </div>

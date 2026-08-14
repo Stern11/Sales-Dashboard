@@ -13,7 +13,20 @@
       "Bash(find / -maxdepth 6 -iname \"*chromium-cli*\")",
       "Bash(find / -maxdepth 6 -iname \"*playwright*\")",
       "Read(//Users/aryanpratap/.cache/**)",
-      "Bash(npx --version)"
+      "Bash(npx --version)",
+      "Bash(date -j -f \"%Y-%m-%d\" \"2026-08-01\" \"+%A\")",
+      "Bash(python3 -c \"import datetime; print\\(datetime.date\\(2026,8,1\\).strftime\\('%A'\\)\\)\")",
+      "Bash(npm test *)",
+      "Bash(ps -p 31795 -o pid,command)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:5173/)",
+      "Bash(npx --no-install chromium-cli --version)",
+      "Bash(lsof -ti:3000 -sTCP:LISTEN)",
+      "Bash(xargs -r kill)",
+      "Bash(nohup vercel dev --yes --listen 3000)",
+      "Bash(echo \"started pid $!\")",
+      "Bash(timeout 40 bash -c 'until curl -sf http://localhost:3000/api/demo-calls >/dev/null 2>&1; do sleep 1; done')",
+      "Read(//private/tmp/**)",
+      "Bash(node *)"
     ]
   }
 }

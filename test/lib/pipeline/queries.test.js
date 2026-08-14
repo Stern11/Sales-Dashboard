@@ -32,6 +32,12 @@ describe("summarize", () => {
     expect(s.open_pipeline_value).toBe(35000);
   });
 
+  it("sums closed_won_value only for won-stage leads — a subset of open_pipeline_value, which (per the test above) already includes won alongside sql..commercial", () => {
+    const s = summarize([lead("won", 4000), lead("won", 6000), lead("sql", 999), lead("cold", 999)]);
+    expect(s.closed_won_value).toBe(10000);
+    expect(s.open_pipeline_value).toBe(10999); // won (10000) + sql (999), cold excluded
+  });
+
   it("treats missing/null deal_size as 0, not NaN", () => {
     const s = summarize([lead("sql", null), lead("sql", undefined), lead("sql")]);
     expect(s.open_pipeline_value).toBe(0);
