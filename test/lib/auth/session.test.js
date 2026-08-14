@@ -11,6 +11,19 @@ describe("signSession / verifySession", () => {
     expect(typeof payload.exp).toBe("number");
   });
 
+  // Callers used to pass `process.env.SESSION_SECRET || ""`. That was never
+  // forgeable — WebCrypto rejects a zero-length HMAC key — but it threw a
+  // DataError out of verifySession rather than returning null, turning a
+  // missing env var into a 500 on every /api/* request instead of a 401.
+  // Returning null keeps the "never throws on bad input" contract this
+  // function's docblock promises.
+  it("returns null (never throws) when the secret is empty or missing", async () => {
+    const real = await signSession({ email: "aryan@heizen.work" }, SECRET, 3600);
+    await expect(verifySession(real, "")).resolves.toBeNull();
+    await expect(verifySession(real, undefined)).resolves.toBeNull();
+    await expect(verifySession(real, null)).resolves.toBeNull();
+  });
+
   it("rejects a token signed with a different secret", async () => {
     const token = await signSession({ email: "aryan@heizen.work" }, SECRET, 3600);
     const payload = await verifySession(token, "a-different-secret");

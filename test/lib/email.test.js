@@ -94,16 +94,32 @@ describe("notifyTagged", () => {
     expect(body.html).toContain("&lt;script&gt;");
   });
 
-  it("builds a working lead link from the request's own host when req is provided", async () => {
-    await notifyTagged({
-      to: "a@b.com", actor: "Aryan", companyName: "Acme", leadId: "abc-123", noteBody: "x",
-      req: { headers: { host: "example.com", "x-forwarded-proto": "https" } },
-    });
+  it("builds the lead link from the configured origin", async () => {
+    process.env.APP_ORIGIN = "https://dashboard.heizen.work";
+    await notifyTagged({ to: "a@b.com", actor: "Aryan", companyName: "Acme", leadId: "abc-123", noteBody: "x" });
     const body = JSON.parse(globalThis.fetch.mock.calls[0][1].body);
-    expect(body.text).toContain("https://example.com/pipeline?lead=abc-123");
+    expect(body.text).toContain("https://dashboard.heizen.work/pipeline?lead=abc-123");
+    delete process.env.APP_ORIGIN;
   });
 
-  it("omits the lead link (doesn't crash) when no req is provided", async () => {
+  // The origin used to come from req.headers.host, which the caller controls
+  // — so whoever triggered the email chose where its button pointed, in mail
+  // sent from our own verified sender to a real colleague.
+  it("ignores the request's Host header when choosing the link origin", async () => {
+    process.env.APP_ORIGIN = "https://dashboard.heizen.work";
+    await notifyTagged({
+      to: "a@b.com", actor: "Aryan", companyName: "Acme", leadId: "abc-123", noteBody: "x",
+      req: { headers: { host: "evil.example", "x-forwarded-proto": "https" } },
+    });
+    const body = JSON.parse(globalThis.fetch.mock.calls[0][1].body);
+    expect(body.text).not.toContain("evil.example");
+    expect(body.html).not.toContain("evil.example");
+    delete process.env.APP_ORIGIN;
+  });
+
+  it("omits the lead link (doesn't crash) when no origin is configured", async () => {
+    delete process.env.APP_ORIGIN;
+    delete process.env.VERCEL_PROJECT_PRODUCTION_URL;
     await notifyTagged({ to: "a@b.com", actor: "Aryan", companyName: "Acme", leadId: "1", noteBody: "x" });
     const body = JSON.parse(globalThis.fetch.mock.calls[0][1].body);
     expect(body.text).not.toContain("View the lead:");

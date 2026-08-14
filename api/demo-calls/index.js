@@ -24,6 +24,7 @@
 // the import panel only, not a general HubSpot read path for this module.
 
 import { withDbErrorHandling, ValidationError, ConflictError } from "../../lib/demo-calls/respond.js";
+import { requireActor } from "../../lib/auth/actor.js";
 import { withHubspotErrorHandling } from "../../lib/respond.js";
 import { getToken } from "../../lib/hubspot.js";
 import { fetchEngagementsForContact } from "../../lib/demo-calls/hubspotEngagements.js";
@@ -31,14 +32,43 @@ import { listLeads, createLead, getLeadByHubspotContactId, getLeadByPipelineLead
 import { isValidOutcome, isValidCompanyScale } from "../../lib/demo-calls/constants.js";
 
 function validateCreateBody(body) {
-  const { company_name, contact_name, actor, first_call, company_scale } = body || {};
+  const { company_name, contact_name, first_call, company_scale } = body || {};
   if (!company_name || !String(company_name).trim()) throw new ValidationError("company_name is required.");
   if (!contact_name || !String(contact_name).trim()) throw new ValidationError("contact_name is required.");
-  if (!actor || !String(actor).trim()) throw new ValidationError("actor (name tag) is required.");
   if (!isValidCompanyScale(company_scale)) throw new ValidationError("Invalid company_scale.");
   if (first_call && !isValidOutcome(first_call.outcome)) {
     throw new ValidationError("Invalid first_call.outcome.");
   }
+}
+
+/**
+ * The columns a client may set when creating a demo-call lead, coerced to
+ * the types their columns expect. Same reasoning as pickCreateFields in
+ * api/pipeline/index.js: the raw body used to be passed straight to
+ * createLead(), which destructured whatever it found there.
+ */
+function pickCreateFields(body) {
+  const b = body || {};
+  const first = b.first_call;
+  return {
+    company_name: String(b.company_name).trim(),
+    contact_name: String(b.contact_name).trim(),
+    email: b.email ? String(b.email).trim() : null,
+    phone: b.phone ? String(b.phone).trim() : null,
+    hubspot_contact_id: b.hubspot_contact_id != null ? String(b.hubspot_contact_id) : null,
+    hubspot_origin_module: b.hubspot_origin_module ? String(b.hubspot_origin_module) : null,
+    company_scale: b.company_scale || null,
+    source: b.source ? String(b.source) : null,
+    first_call: first
+      ? {
+          call_date: first.call_date || null,
+          outcome: first.outcome,
+          notes: first.notes ? String(first.notes) : null,
+          next_steps: first.next_steps ? String(first.next_steps) : null,
+          transcript_url: first.transcript_url ? String(first.transcript_url) : null,
+        }
+      : null,
+  };
 }
 
 export default async function handler(req, res) {
@@ -83,7 +113,8 @@ export default async function handler(req, res) {
           });
         }
       }
-      const lead = await createLead(req.body);
+      const actor = await requireActor(req);
+      const lead = await createLead({ ...pickCreateFields(req.body), actor });
       return { lead };
     });
     return;

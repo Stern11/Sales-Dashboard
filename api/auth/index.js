@@ -50,6 +50,14 @@ async function handleLogin(req, res) {
     }
 
     if (!payload?.email_verified) throw new AuthError("Google account email isn't verified.");
+
+    // Two independent checks, both required.
+    //
+    // `hd` (hosted domain) is the claim that actually proves the account is
+    // a Google Workspace account in our domain — it's set by Google and a
+    // consumer account can never carry it. The email suffix alone is the
+    // weaker signal, which is why it isn't trusted on its own here.
+    if (payload.hd !== ALLOWED_EMAIL_DOMAIN) throw new AuthError(`Only @${ALLOWED_EMAIL_DOMAIN} accounts can sign in.`);
     if (!isAllowedEmail(payload.email)) throw new AuthError(`Only @${ALLOWED_EMAIL_DOMAIN} accounts can sign in.`);
 
     const session = { email: payload.email.toLowerCase(), name: payload.name || payload.email };

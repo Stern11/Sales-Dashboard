@@ -1,6 +1,7 @@
 import { Modal } from "../../components/Modal.jsx";
 import { StatusPill } from "../../components/StatusPill.jsx";
 import { outcomeMeta, statusMeta, formatCallDate } from "../demo-calls/constants.js";
+import { safeUrl } from "../../lib/safeUrl.js";
 
 /**
  * Read-only view of a lead's Demo Calls history, opened from
@@ -48,7 +49,9 @@ export function DemoCallHistoryModal({ lead, calls, onClose }) {
             {call.transcript_url && (
               <div className="call-entry-field">
                 <div className="call-entry-field-label">Transcript</div>
-                <a href={call.transcript_url} target="_blank" rel="noopener noreferrer">{call.transcript_url} ↗</a>
+                {safeUrl(call.transcript_url)
+                  ? <a href={safeUrl(call.transcript_url)} target="_blank" rel="noopener noreferrer">{call.transcript_url} ↗</a>
+                  : <span>{call.transcript_url}</span>}
               </div>
             )}
           </div>

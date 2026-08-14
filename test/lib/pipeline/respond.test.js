@@ -47,10 +47,14 @@ describe("withDbErrorHandling", () => {
     expect(res.statusCode).toBe(409);
   });
 
-  it("falls back to 500 for an unrecognized error", async () => {
+  it("falls back to 500 for an unrecognized error without leaking its message", async () => {
     const res = mockRes();
-    await withDbErrorHandling(res, async () => { throw new Error("something else"); });
+    // Unrecognized errors here are raw Postgres faults (constraint names,
+    // SQLSTATE text) or full upstream HubSpot response bodies. They belong
+    // in the server log, not in a browser, so the client gets a fixed string.
+    await withDbErrorHandling(res, async () => { throw new Error("relation \"pipeline_leads\" does not exist"); });
     expect(res.statusCode).toBe(500);
-    expect(res.body.error).toBe("something else");
+    expect(res.body.error).toBe("Something went wrong. Please try again.");
+    expect(res.body.error).not.toContain("pipeline_leads");
   });
 });

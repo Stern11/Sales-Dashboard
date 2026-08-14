@@ -3,6 +3,7 @@ import { StatusPill } from "../../components/StatusPill.jsx";
 import { useDemoCallsMutations } from "./useDemoCallsMutations.js";
 import { useNameTagContext } from "../../context/NameTagContext.jsx";
 import { outcomeMeta, outcomeOptionsFor, relativeTime, formatCallDate } from "./constants.js";
+import { safeUrl } from "../../lib/safeUrl.js";
 
 const EMPTY_CALL_FORM = { call_date: "", outcome: "completed", notes: "", next_steps: "", transcript_url: "" };
 
@@ -133,7 +134,9 @@ function CallEntry({ call, onSaved }) {
       {call.transcript_url && (
         <div className="call-entry-field">
           <div className="call-entry-field-label">Transcript</div>
-          <a href={call.transcript_url} target="_blank" rel="noopener noreferrer">{call.transcript_url} ↗</a>
+          {safeUrl(call.transcript_url)
+            ? <a href={safeUrl(call.transcript_url)} target="_blank" rel="noopener noreferrer">{call.transcript_url} ↗</a>
+            : <span>{call.transcript_url}</span>}
         </div>
       )}
     </div>

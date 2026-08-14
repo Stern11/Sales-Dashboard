@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { signalTypeLabel, formatShortDate } from "./constants.js";
 import { SignalModal } from "./SignalModal.jsx";
+import { safeUrl } from "../../lib/safeUrl.js";
 
 function areaNameFor(areas, id) {
   return (areas || []).find((a) => a.id === id)?.area;
@@ -24,7 +25,7 @@ export function SignalsSection({ accountId, signals, areas, onChanged }) {
             <div key={s.id} className="note-item" style={{ cursor: "pointer" }} onClick={() => setModalTarget(s)}>
               <div className="note-item-meta">
                 <span><strong style={{ color: "var(--text-primary)" }}>{formatShortDate(s.signal_date)}</strong> · {signalTypeLabel(s.signal_type)}</span>
-                {s.source_url && <a className="li-link" href={s.source_url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>Source ↗</a>}
+                {safeUrl(s.source_url) && <a className="li-link" href={safeUrl(s.source_url)} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>Source ↗</a>}
               </div>
               <div className="note-item-body">{s.finding}</div>
               {areaNameFor(areas, s.expansion_area_id) && (

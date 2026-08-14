@@ -19,6 +19,8 @@
 //   POST   /api/demo-calls/:id?action=link-pipeline    — record the Sales Pipeline handoff
 
 import { withDbErrorHandling, ValidationError, NotFoundError } from "../../lib/demo-calls/respond.js";
+import { requireActor } from "../../lib/auth/actor.js";
+import { isUuid } from "../../lib/validateId.js";
 import {
   getLeadById, updateLead, deleteLead, listCalls,
   addCall, updateCall, setStatus, linkPipeline,
@@ -36,8 +38,7 @@ async function handleGetOne(req, res, id) {
 
 async function handleUpdateLead(req, res, id) {
   await withDbErrorHandling(res, async () => {
-    const actor = req.body?.actor;
-    if (!actor || !String(actor).trim()) throw new ValidationError("actor (name tag) is required.");
+    const actor = await requireActor(req);
     if (Object.prototype.hasOwnProperty.call(req.body || {}, "company_scale") && !isValidCompanyScale(req.body.company_scale)) {
       throw new ValidationError("Invalid company_scale.");
     }
@@ -49,8 +50,7 @@ async function handleUpdateLead(req, res, id) {
 
 async function handleUpdateCall(req, res, id, callId) {
   await withDbErrorHandling(res, async () => {
-    const actor = req.body?.actor;
-    if (!actor || !String(actor).trim()) throw new ValidationError("actor (name tag) is required.");
+    const actor = await requireActor(req);
     if (Object.prototype.hasOwnProperty.call(req.body || {}, "outcome") && !isValidOutcome(req.body.outcome)) {
       throw new ValidationError("Invalid outcome.");
     }
@@ -62,8 +62,9 @@ async function handleUpdateCall(req, res, id, callId) {
 
 async function handleDelete(req, res, id) {
   await withDbErrorHandling(res, async () => {
-    const actor = req.body?.actor;
-    if (!actor || !String(actor).trim()) throw new ValidationError("actor (name tag) is required.");
+    // Deleting records nothing to attribute (the row is gone), but the call
+    // still has to come from a real session — this is the destructive one.
+    await requireActor(req);
 
     const lead = await getLeadById(id);
     if (!lead) throw new NotFoundError("No demo call lead with that id.");
@@ -80,9 +81,8 @@ async function handleDelete(req, res, id) {
 
 async function handleAddCall(req, res, id) {
   await withDbErrorHandling(res, async () => {
-    const { actor } = req.body || {};
+    const actor = await requireActor(req);
     if (!isValidOutcome(req.body?.outcome)) throw new ValidationError("Invalid outcome.");
-    if (!actor || !String(actor).trim()) throw new ValidationError("actor (name tag) is required.");
 
     const lead = await getLeadById(id);
     if (!lead) throw new NotFoundError("No demo call lead with that id.");
@@ -94,9 +94,9 @@ async function handleAddCall(req, res, id) {
 
 async function handleSetStatus(req, res, id) {
   await withDbErrorHandling(res, async () => {
-    const { status, reason, actor } = req.body || {};
+    const { status, reason } = req.body || {};
+    const actor = await requireActor(req);
     if (!isValidStatus(status)) throw new ValidationError("Invalid status.");
-    if (!actor || !String(actor).trim()) throw new ValidationError("actor (name tag) is required.");
     const lead = await setStatus(id, { status, reason: reason || null, actor });
     if (!lead) throw new NotFoundError("No demo call lead with that id.");
     return { lead };
@@ -105,9 +105,9 @@ async function handleSetStatus(req, res, id) {
 
 async function handleLinkPipeline(req, res, id) {
   await withDbErrorHandling(res, async () => {
-    const { pipeline_lead_id, actor } = req.body || {};
+    const { pipeline_lead_id } = req.body || {};
+    const actor = await requireActor(req);
     if (!pipeline_lead_id) throw new ValidationError("pipeline_lead_id is required.");
-    if (!actor || !String(actor).trim()) throw new ValidationError("actor (name tag) is required.");
     const lead = await linkPipeline(id, pipeline_lead_id, actor);
     if (!lead) throw new NotFoundError("No demo call lead with that id.");
     return { lead };
@@ -116,6 +116,12 @@ async function handleLinkPipeline(req, res, id) {
 
 export default async function handler(req, res) {
   const { id, action, call_id: callId } = req.query;
+
+  if (!isUuid(id)) {
+    res.setHeader("Cache-Control", "no-store");
+    res.status(404).json({ error: "No demo call lead with that id." });
+    return;
+  }
 
   if (req.method === "GET") return handleGetOne(req, res, id);
 

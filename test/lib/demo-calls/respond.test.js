@@ -45,10 +45,11 @@ describe("withDbErrorHandling", () => {
     expect(res.statusCode).toBe(409);
   });
 
-  it("falls back to 500 for an unrecognized error", async () => {
+  it("falls back to 500 for an unrecognized error without leaking its message", async () => {
     const res = mockRes();
-    await withDbErrorHandling(res, async () => { throw new Error("something else"); });
+    await withDbErrorHandling(res, async () => { throw new Error("relation \"demo_call_logs\" does not exist"); });
     expect(res.statusCode).toBe(500);
-    expect(res.body.error).toBe("something else");
+    expect(res.body.error).toBe("Something went wrong. Please try again.");
+    expect(res.body.error).not.toContain("demo_call_logs");
   });
 });

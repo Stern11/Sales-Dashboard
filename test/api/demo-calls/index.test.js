@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, beforeAll } from "vitest";
+import { sessionCookie } from "../../helpers/session.js";
 import handler from "../../../api/demo-calls/index.js";
 import * as queries from "../../../lib/demo-calls/queries.js";
 import * as hubspot from "../../../lib/hubspot.js";
@@ -21,8 +22,17 @@ vi.mock("../../../lib/demo-calls/hubspotEngagements.js", () => ({
   fetchEngagementsForContact: vi.fn(),
 }));
 
-function mockReqRes({ method = "GET", body = {}, query = {} } = {}) {
-  const req = { method, body, query };
+// Write routes resolve their actor from the session cookie (lib/auth/actor.js),
+// so the default request carries a valid one. Pass `cookie: null` for the
+// unauthenticated path.
+let AUTHED_COOKIE;
+beforeAll(async () => { AUTHED_COOKIE = await sessionCookie(); });
+
+function mockReqRes({ method = "GET", body = {}, query = {}, cookie = undefined } = {}) {
+  const headers = {};
+  const resolved = cookie === undefined ? AUTHED_COOKIE : cookie;
+  if (resolved) headers.cookie = resolved;
+  const req = { method, body, query, headers };
   const res = { statusCode: null, body: null };
   res.status = vi.fn((c) => { res.statusCode = c; return res; });
   res.json = vi.fn((b) => { res.body = b; return res; });
@@ -117,10 +127,10 @@ describe("POST /api/demo-calls", () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it("400s when actor is missing", async () => {
-    const { req, res } = mockReqRes({ method: "POST", body: { company_name: "Acme", contact_name: "Jane" } });
+  it("401s without a session — the actor comes from the session, not the body", async () => {
+    const { req, res } = mockReqRes({ method: "POST", body: { company_name: "Acme", contact_name: "Jane" }, cookie: null });
     await handler(req, res);
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(401);
   });
 
   it("400s on an invalid first_call.outcome", async () => {
@@ -133,11 +143,11 @@ describe("POST /api/demo-calls", () => {
   });
 
   it("creates a lead when the body is valid", async () => {
-    queries.createLead.mockResolvedValue({ id: "lead-1", company_name: "Acme" });
+    queries.createLead.mockResolvedValue({ id: "11111111-1111-4111-8111-111111111111", company_name: "Acme" });
     const { req, res } = mockReqRes({ method: "POST", body: { company_name: "Acme", contact_name: "Jane", actor: "Aryan" } });
     await handler(req, res);
     expect(res.statusCode).toBe(200);
-    expect(res.body.lead.id).toBe("lead-1");
+    expect(res.body.lead.id).toBe("11111111-1111-4111-8111-111111111111");
   });
 
   it("409s when hubspot_contact_id already has a tracked lead — doesn't call createLead", async () => {

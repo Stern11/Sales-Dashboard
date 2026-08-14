@@ -32,16 +32,11 @@ import {
   createStakeholder, updateStakeholder, deleteStakeholder,
   createQuestion, updateQuestion, deleteQuestion,
 } from "../../lib/account-expansion/queries.js";
+import { requireActor } from "../../lib/auth/actor.js";
 import {
   isValidExpansionOutlook, isValidAreaStatus, isValidRelevance,
   isValidWhitespaceStatus, isValidSignalType, isValidRelationship, isValidQuestionPriority,
 } from "../../lib/account-expansion/constants.js";
-
-function requireActor(body) {
-  const actor = body?.actor;
-  if (!actor || !String(actor).trim()) throw new ValidationError("actor (name tag) is required.");
-  return actor;
-}
 
 async function requireAccount(id) {
   const account = await getAccountById(id);
@@ -57,7 +52,7 @@ async function handleList(req, res) {
 
 async function handleCreateAccount(req, res) {
   await withDbErrorHandling(res, async () => {
-    const actor = requireActor(req.body);
+    const actor = await requireActor(req);
     const { company_name, segment_id } = req.body || {};
     if (!company_name || !String(company_name).trim()) throw new ValidationError("company_name is required.");
     const account = await createAccount({ company_name, segment_id: segment_id || null }, actor);
@@ -67,6 +62,7 @@ async function handleCreateAccount(req, res) {
 
 async function handleDeleteAccount(req, res, id) {
   await withDbErrorHandling(res, async () => {
+    await requireActor(req);
     const account = await requireAccount(id);
     const confirmation = String(req.body?.confirm_company_name || "").trim();
     if (confirmation !== account.company_name) {
@@ -86,7 +82,7 @@ async function handleGetDetail(req, res, id) {
 
 async function handleUpdateFootprint(req, res, id) {
   await withDbErrorHandling(res, async () => {
-    const actor = requireActor(req.body);
+    const actor = await requireActor(req);
     if (Object.prototype.hasOwnProperty.call(req.body || {}, "expansion_outlook") && !isValidExpansionOutlook(req.body.expansion_outlook)) {
       throw new ValidationError("Invalid expansion_outlook.");
     }
@@ -100,7 +96,7 @@ async function handleUpdateFootprint(req, res, id) {
 
 async function handleCreateArea(req, res, id) {
   await withDbErrorHandling(res, async () => {
-    const actor = requireActor(req.body);
+    const actor = await requireActor(req);
     await requireAccount(id);
     const { area, status = "idea", relevance = "medium" } = req.body || {};
     if (!area || !String(area).trim()) throw new ValidationError("area is required.");
@@ -113,7 +109,7 @@ async function handleCreateArea(req, res, id) {
 
 async function handleUpdateArea(req, res, id, itemId) {
   await withDbErrorHandling(res, async () => {
-    const actor = requireActor(req.body);
+    const actor = await requireActor(req);
     if (Object.prototype.hasOwnProperty.call(req.body || {}, "status") && !isValidAreaStatus(req.body.status)) {
       throw new ValidationError("Invalid status.");
     }
@@ -130,7 +126,7 @@ async function handleUpdateArea(req, res, id, itemId) {
 
 async function handleSetWhitespace(req, res, id) {
   await withDbErrorHandling(res, async () => {
-    const actor = requireActor(req.body);
+    const actor = await requireActor(req);
     await requireAccount(id);
     const { area, status = "unknown" } = req.body || {};
     if (!area || !String(area).trim()) throw new ValidationError("area is required.");
@@ -142,6 +138,7 @@ async function handleSetWhitespace(req, res, id) {
 
 async function handleDeleteWhitespace(req, res, id, itemId) {
   await withDbErrorHandling(res, async () => {
+    await requireActor(req);
     const row = await deleteWhitespace(id, itemId);
     if (!row) throw new NotFoundError("No whitespace row with that id for this account.");
     return { deleted: true, id: itemId };
@@ -152,7 +149,7 @@ async function handleDeleteWhitespace(req, res, id, itemId) {
 
 async function handleCreateSignal(req, res, id) {
   await withDbErrorHandling(res, async () => {
-    const actor = requireActor(req.body);
+    const actor = await requireActor(req);
     await requireAccount(id);
     const { signal_date, signal_type, finding } = req.body || {};
     if (!signal_date) throw new ValidationError("signal_date is required.");
@@ -165,7 +162,7 @@ async function handleCreateSignal(req, res, id) {
 
 async function handleUpdateSignal(req, res, id, itemId) {
   await withDbErrorHandling(res, async () => {
-    const actor = requireActor(req.body);
+    const actor = await requireActor(req);
     if (Object.prototype.hasOwnProperty.call(req.body || {}, "signal_type") && !isValidSignalType(req.body.signal_type)) {
       throw new ValidationError("Invalid signal_type.");
     }
@@ -177,6 +174,7 @@ async function handleUpdateSignal(req, res, id, itemId) {
 
 async function handleDeleteSignal(req, res, id, itemId) {
   await withDbErrorHandling(res, async () => {
+    await requireActor(req);
     const row = await deleteSignal(id, itemId);
     if (!row) throw new NotFoundError("No research signal with that id for this account.");
     return { deleted: true, id: itemId };
@@ -187,7 +185,7 @@ async function handleDeleteSignal(req, res, id, itemId) {
 
 async function handleCreateStakeholder(req, res, id) {
   await withDbErrorHandling(res, async () => {
-    const actor = requireActor(req.body);
+    const actor = await requireActor(req);
     await requireAccount(id);
     const { relationship = "unknown" } = req.body || {};
     if (!isValidRelationship(relationship)) throw new ValidationError("Invalid relationship.");
@@ -198,7 +196,7 @@ async function handleCreateStakeholder(req, res, id) {
 
 async function handleUpdateStakeholder(req, res, id, itemId) {
   await withDbErrorHandling(res, async () => {
-    const actor = requireActor(req.body);
+    const actor = await requireActor(req);
     if (Object.prototype.hasOwnProperty.call(req.body || {}, "relationship") && !isValidRelationship(req.body.relationship)) {
       throw new ValidationError("Invalid relationship.");
     }
@@ -210,6 +208,7 @@ async function handleUpdateStakeholder(req, res, id, itemId) {
 
 async function handleDeleteStakeholder(req, res, id, itemId) {
   await withDbErrorHandling(res, async () => {
+    await requireActor(req);
     const row = await deleteStakeholder(id, itemId);
     if (!row) throw new NotFoundError("No stakeholder with that id for this account.");
     return { deleted: true, id: itemId };
@@ -220,7 +219,7 @@ async function handleDeleteStakeholder(req, res, id, itemId) {
 
 async function handleCreateQuestion(req, res, id) {
   await withDbErrorHandling(res, async () => {
-    const actor = requireActor(req.body);
+    const actor = await requireActor(req);
     await requireAccount(id);
     const { question, priority = "medium" } = req.body || {};
     if (!question || !String(question).trim()) throw new ValidationError("question is required.");
@@ -232,7 +231,7 @@ async function handleCreateQuestion(req, res, id) {
 
 async function handleUpdateQuestion(req, res, id, itemId) {
   await withDbErrorHandling(res, async () => {
-    const actor = requireActor(req.body);
+    const actor = await requireActor(req);
     if (Object.prototype.hasOwnProperty.call(req.body || {}, "priority") && !isValidQuestionPriority(req.body.priority)) {
       throw new ValidationError("Invalid priority.");
     }
@@ -244,6 +243,7 @@ async function handleUpdateQuestion(req, res, id, itemId) {
 
 async function handleDeleteQuestion(req, res, id, itemId) {
   await withDbErrorHandling(res, async () => {
+    await requireActor(req);
     const row = await deleteQuestion(id, itemId);
     if (!row) throw new NotFoundError("No open question with that id for this account.");
     return { deleted: true, id: itemId };

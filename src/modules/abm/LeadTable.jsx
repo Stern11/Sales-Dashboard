@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { DataTable } from "../../components/DataTable.jsx";
 import { StatusPill } from "../../components/StatusPill.jsx";
+import { safeUrl } from "../../lib/safeUrl.js";
 
 const EMAIL_PILL_VARIANT = {
   "No Email On File": "missing",
@@ -129,8 +130,8 @@ export function LeadTable({ leads, pipelineStatus, selectedIds, onToggleSelect }
           label: "LinkedIn",
           sortable: false,
           render: (l) =>
-            l.linkedin_url
-              ? <a className="li-link" href={l.linkedin_url} target="_blank" rel="noopener noreferrer">Open ↗</a>
+            safeUrl(l.linkedin_url)
+              ? <a className="li-link" href={safeUrl(l.linkedin_url)} target="_blank" rel="noopener noreferrer">Open ↗</a>
               : <StatusPill variant="missing">Not found</StatusPill>,
         },
       ]}
