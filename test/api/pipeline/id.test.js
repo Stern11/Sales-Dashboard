@@ -1,11 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import handler from "../../../api/pipeline/[id]/notes.js";
+import handler from "../../../api/pipeline/[id]/index.js";
 import * as queries from "../../../lib/pipeline/queries.js";
 import * as email from "../../../lib/email.js";
 
 vi.mock("../../../lib/pipeline/queries.js", () => ({
   addNote: vi.fn(),
   getLeadById: vi.fn(),
+  updateLead: vi.fn(),
+  deleteLead: vi.fn(),
+  listNotes: vi.fn(),
+  listStageHistory: vi.fn(),
+  changeStage: vi.fn(),
 }));
 vi.mock("../../../lib/email.js", () => ({
   notifyTagged: vi.fn(),
@@ -20,7 +25,7 @@ function mockReqRes({ method = "POST", body = {}, query = {} } = {}) {
   return { req, res };
 }
 
-describe("POST /api/pipeline/:id/notes", () => {
+describe("POST /api/pipeline/:id?action=notes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     queries.getLeadById.mockResolvedValue({
@@ -31,27 +36,27 @@ describe("POST /api/pipeline/:id/notes", () => {
     email.notifyTagged.mockResolvedValue(undefined);
   });
 
-  it("405s for a non-POST method", async () => {
-    const { req, res } = mockReqRes({ method: "GET" });
+  it("400s a POST with no ?action= and no stage-change body", async () => {
+    const { req, res } = mockReqRes({ body: {}, query: { id: "lead-1" } });
     await handler(req, res);
-    expect(res.statusCode).toBe(405);
+    expect(res.statusCode).toBe(400);
   });
 
   it("400s when body is missing", async () => {
-    const { req, res } = mockReqRes({ body: { author: "Aryan" }, query: { id: "lead-1" } });
+    const { req, res } = mockReqRes({ body: { author: "Aryan" }, query: { id: "lead-1", action: "notes" } });
     await handler(req, res);
     expect(res.statusCode).toBe(400);
   });
 
   it("400s when author is missing", async () => {
-    const { req, res } = mockReqRes({ body: { body: "hi" }, query: { id: "lead-1" } });
+    const { req, res } = mockReqRes({ body: { body: "hi" }, query: { id: "lead-1", action: "notes" } });
     await handler(req, res);
     expect(res.statusCode).toBe(400);
   });
 
   it("404s when the lead doesn't exist", async () => {
     queries.getLeadById.mockResolvedValue(null);
-    const { req, res } = mockReqRes({ body: { body: "hi", author: "Aryan" }, query: { id: "missing" } });
+    const { req, res } = mockReqRes({ body: { body: "hi", author: "Aryan" }, query: { id: "missing", action: "notes" } });
     await handler(req, res);
     expect(res.statusCode).toBe(404);
   });
@@ -59,7 +64,7 @@ describe("POST /api/pipeline/:id/notes", () => {
   it("filters malformed tagged_emails before saving — a bad tag must not fail the whole note", async () => {
     const { req, res } = mockReqRes({
       body: { body: "hi", author: "Aryan", tagged_emails: ["valid@heizen.work", "not-an-email", "  ", "also.valid@x.co"] },
-      query: { id: "lead-1" },
+      query: { id: "lead-1", action: "notes" },
     });
     await handler(req, res);
     expect(res.statusCode).toBe(200);
@@ -72,7 +77,7 @@ describe("POST /api/pipeline/:id/notes", () => {
   it("dedupes repeated tagged_emails", async () => {
     const { req, res } = mockReqRes({
       body: { body: "hi", author: "Aryan", tagged_emails: ["a@b.com", "a@b.com"] },
-      query: { id: "lead-1" },
+      query: { id: "lead-1", action: "notes" },
     });
     await handler(req, res);
     expect(queries.addNote.mock.calls[0][1].tagged_emails).toEqual(["a@b.com"]);
@@ -81,7 +86,7 @@ describe("POST /api/pipeline/:id/notes", () => {
   it("calls notifyTagged once per valid tagged email, passing lead context through", async () => {
     const { req, res } = mockReqRes({
       body: { body: "please review", author: "Aryan", tagged_emails: ["a@b.com", "c@d.com"] },
-      query: { id: "lead-1" },
+      query: { id: "lead-1", action: "notes" },
     });
     await handler(req, res);
     expect(email.notifyTagged).toHaveBeenCalledTimes(2);
@@ -96,7 +101,7 @@ describe("POST /api/pipeline/:id/notes", () => {
     email.notifyTagged.mockRejectedValue(new Error("Resend is down"));
     const { req, res } = mockReqRes({
       body: { body: "hi", author: "Aryan", tagged_emails: ["a@b.com"] },
-      query: { id: "lead-1" },
+      query: { id: "lead-1", action: "notes" },
     });
     await handler(req, res);
     expect(res.statusCode).toBe(200);
@@ -105,8 +110,41 @@ describe("POST /api/pipeline/:id/notes", () => {
   });
 
   it("skips notifyTagged entirely when there are no tagged emails", async () => {
-    const { req, res } = mockReqRes({ body: { body: "hi", author: "Aryan" }, query: { id: "lead-1" } });
+    const { req, res } = mockReqRes({ body: { body: "hi", author: "Aryan" }, query: { id: "lead-1", action: "notes" } });
     await handler(req, res);
     expect(email.notifyTagged).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /api/pipeline/:id?action=stage", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    queries.changeStage.mockResolvedValue({ id: "lead-1", stage: "won" });
+  });
+
+  it("400s an invalid to_stage", async () => {
+    const { req, res } = mockReqRes({ body: { to_stage: "bogus", actor: "Aryan" }, query: { id: "lead-1", action: "stage" } });
+    await handler(req, res);
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("400s when actor is missing", async () => {
+    const { req, res } = mockReqRes({ body: { to_stage: "won" }, query: { id: "lead-1", action: "stage" } });
+    await handler(req, res);
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("404s when the lead doesn't exist", async () => {
+    queries.changeStage.mockResolvedValue(null);
+    const { req, res } = mockReqRes({ body: { to_stage: "won", actor: "Aryan" }, query: { id: "missing", action: "stage" } });
+    await handler(req, res);
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("200s and returns the updated lead on success", async () => {
+    const { req, res } = mockReqRes({ body: { to_stage: "won", actor: "Aryan" }, query: { id: "lead-1", action: "stage" } });
+    await handler(req, res);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.lead).toEqual({ id: "lead-1", stage: "won" });
   });
 });

@@ -61,9 +61,12 @@ h1 { font-size: 21px; margin: 0 0 4px; color: var(--text-primary); }
 .sidebar-nav a:hover { color: var(--text-primary); background: var(--page-plane); }
 .sidebar-nav a.active { color: var(--seq-450); background: var(--pill-stage-bg); }
 
-.sidebar-footer { margin-top: auto; }
+.sidebar-footer { margin-top: auto; display: flex; flex-direction: column; gap: 6px; }
 .sidebar-footer .btn { margin: 0; width: 100%; }
 .sidebar.collapsed .sidebar-footer .btn { width: auto; margin: 0; padding: 6px 8px; }
+.sidebar-user { padding: 0 2px; }
+.sidebar-user-name { font-size: 12.5px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sidebar-user-email { font-size: 10.5px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* Segment / period tabs (pill-style toggle group) */
 .tab-group { display: flex; gap: 6px; margin-bottom: 18px; flex-wrap: wrap; }
@@ -201,6 +204,13 @@ a.li-link:hover { text-decoration: underline; }
 
 .loading, .error, .empty { padding: 40px; text-align: center; color: var(--text-secondary); font-size: 13px; }
 .error { color: var(--status-critical); }
+
+.login-page { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--page-plane); }
+.login-card {
+  background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px;
+  padding: 36px 40px; text-align: center; min-width: 320px;
+}
+.login-title { font-size: 19px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; }
 
 @media (max-width: 900px) {
   .kpi-row { grid-template-columns: repeat(2, 1fr); }

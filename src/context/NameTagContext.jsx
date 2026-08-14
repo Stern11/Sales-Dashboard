@@ -1,47 +1,31 @@
-import { createContext, useCallback, useContext, useRef, useState } from "react";
-import { useNameTag } from "../hooks/useNameTag.js";
-import { NameTagModal } from "../components/NameTagModal.jsx";
+import { createContext, useCallback, useContext } from "react";
+import { useAuthContext } from "./AuthContext.jsx";
 
 const NameTagContext = createContext(null);
 
 /**
- * Mounted once at the app root (see src/App.jsx). Any pipeline mutation path
- * — creating/editing a lead, changing stage, adding a note, or "Add to
- * pipeline" from ABM/Marketing — calls `ensureName()` first: if a name is
- * already stored it resolves immediately, otherwise it opens the one-time
- * prompt and resolves once the user submits (or resolves `null` if they
- * cancel, which callers should treat as "abort the mutation").
+ * Backed by the signed-in Google account (see AuthContext.jsx) rather than a
+ * locally-typed, unverified name — this used to be an honor-system prompt
+ * ("what's your name?", stored in localStorage), but every write's actor is
+ * now the real name on the @heizen.work account that's logged in.
+ *
+ * Same external shape as before ({name, ensureName}, with ensureName()
+ * resolving a Promise<string>) so every existing call site — there are many,
+ * across Pipeline/Demo Calls/ABM/Account Expansion — needed zero changes.
+ * ensureName() always resolves immediately now (no modal, never null):
+ * App.jsx never renders anything that uses this until AuthContext reports
+ * authenticated:true, so a name is always already available by the time
+ * this provider renders.
  */
 export function NameTagProvider({ children }) {
-  const { name, setName } = useNameTag();
-  const [promptOpen, setPromptOpen] = useState(false);
-  const resolverRef = useRef(null);
+  const { name, email } = useAuthContext();
+  const actor = name || email;
 
-  const ensureName = useCallback(() => {
-    if (name) return Promise.resolve(name);
-    setPromptOpen(true);
-    return new Promise((resolve) => {
-      resolverRef.current = resolve;
-    });
-  }, [name]);
-
-  function handleSubmit(value) {
-    setName(value);
-    setPromptOpen(false);
-    resolverRef.current?.(value.trim());
-    resolverRef.current = null;
-  }
-
-  function handleCancel() {
-    setPromptOpen(false);
-    resolverRef.current?.(null);
-    resolverRef.current = null;
-  }
+  const ensureName = useCallback(() => Promise.resolve(actor), [actor]);
 
   return (
-    <NameTagContext.Provider value={{ name, ensureName }}>
+    <NameTagContext.Provider value={{ name: actor, ensureName }}>
       {children}
-      {promptOpen && <NameTagModal onSubmit={handleSubmit} onCancel={handleCancel} />}
     </NameTagContext.Provider>
   );
 }

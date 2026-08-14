@@ -8,6 +8,8 @@ import { DemoCallsPage } from "./modules/demo-calls/DemoCallsPage.jsx";
 import { AccountExpansionPage } from "./modules/account-expansion/AccountExpansionPage.jsx";
 import { AccountDetailPage } from "./modules/account-expansion/AccountDetailPage.jsx";
 import { NameTagProvider } from "./context/NameTagContext.jsx";
+import { AuthProvider, useAuthContext } from "./context/AuthContext.jsx";
+import { LoginPage } from "./components/LoginPage.jsx";
 
 // Derived from the same MODULES list the sidebar renders its links from —
 // one source of truth for "route -> label" instead of a second hardcoded
@@ -18,7 +20,7 @@ function PageHeading() {
   return <h1 className="page-heading">{current?.label || "Dashboard"}</h1>;
 }
 
-export function App() {
+function DashboardShell() {
   return (
     <NameTagProvider>
       <div className="app-shell">
@@ -41,5 +43,21 @@ export function App() {
         </main>
       </div>
     </NameTagProvider>
+  );
+}
+
+/** Nothing that reads real data ever mounts until this resolves to authenticated:true — see AuthContext.jsx. */
+function AuthGate() {
+  const { loading, authenticated } = useAuthContext();
+  if (loading) return <div className="loading">Loading…</div>;
+  if (!authenticated) return <LoginPage />;
+  return <DashboardShell />;
+}
+
+export function App() {
+  return (
+    <AuthProvider>
+      <AuthGate />
+    </AuthProvider>
   );
 }

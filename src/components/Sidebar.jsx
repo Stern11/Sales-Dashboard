@@ -1,6 +1,7 @@
 import { NavLink } from "react-router-dom";
 import { useTheme } from "../hooks/useTheme.js";
 import { useSidebar } from "../hooks/useSidebar.js";
+import { useAuthContext } from "../context/AuthContext.jsx";
 
 // `short` is what's shown when collapsed (initials, not an icon — the app
 // has no icon set, and unicode glyphs elsewhere here are single characters;
@@ -25,6 +26,7 @@ export const MODULES = [
 export function Sidebar() {
   const { theme, toggle } = useTheme();
   const { collapsed, toggle: toggleCollapsed } = useSidebar();
+  const { name, email, logout } = useAuthContext();
 
   return (
     <aside className={`sidebar${collapsed ? " collapsed" : ""}`}>
@@ -58,8 +60,17 @@ export function Sidebar() {
         ))}
       </nav>
       <div className="sidebar-footer">
+        {!collapsed && (
+          <div className="sidebar-user" title={email || undefined}>
+            <div className="sidebar-user-name">{name || email}</div>
+            {email && name && <div className="sidebar-user-email">{email}</div>}
+          </div>
+        )}
         <button className="btn" type="button" onClick={toggle} title={collapsed ? (theme === "dark" ? "Light mode" : "Dark mode") : undefined}>
           {collapsed ? (theme === "dark" ? "☀" : "🌙") : (theme === "dark" ? "Light mode" : "Dark mode")}
+        </button>
+        <button className="btn" type="button" onClick={logout} title={collapsed ? "Log out" : undefined}>
+          {collapsed ? "⎋" : "Log out"}
         </button>
       </div>
     </aside>
