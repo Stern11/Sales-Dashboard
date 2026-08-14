@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { EMPTY_ARRAY } from "../../lib/empty.js";
 import { useSearchParams } from "react-router-dom";
 import { AsyncState } from "../../components/AsyncState.jsx";
 import { KpiRow } from "../../components/KpiRow.jsx";
@@ -74,7 +75,7 @@ export function DemoCallsPage() {
     setSearchParams(id ? { lead: id } : {}, { replace: true });
   }
 
-  const leads = data?.leads || [];
+  const leads = data?.leads ?? EMPTY_ARRAY;
   const trackedHubspotIds = useMemo(
     () => new Set(leads.map((l) => l.hubspot_contact_id).filter(Boolean)),
     [leads]

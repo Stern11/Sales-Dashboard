@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { EMPTY_ARRAY } from "../../lib/empty.js";
 import { AsyncState } from "../../components/AsyncState.jsx";
 import { KpiRow } from "../../components/KpiRow.jsx";
 import { PageMeta } from "../../components/Sidebar.jsx";
@@ -31,8 +32,12 @@ export function OverviewPage() {
   const { data: pipelineData, loading: pipelineLoading, error: pipelineError, refresh: refreshPipeline } = usePipelineList();
   const { data: demoCallsData, loading: demoCallsLoading, error: demoCallsError, refresh: refreshDemoCalls } = useDemoCallsList();
 
-  const pipelineLeads = pipelineData?.leads || [];
-  const demoCallLeads = demoCallsData?.leads || [];
+  // `?? EMPTY_ARRAY` rather than `|| []`: a fresh `[]` on every render gives
+  // every useMemo below a new dependency identity, so they recomputed each
+  // render and the memoization did nothing. The shared frozen constant keeps
+  // the "no data yet" case referentially stable.
+  const pipelineLeads = pipelineData?.leads ?? EMPTY_ARRAY;
+  const demoCallLeads = demoCallsData?.leads ?? EMPTY_ARRAY;
   const pipelineSummary = useMemo(() => summarizePipelineLeads(pipelineLeads), [pipelineLeads]);
   const demoCallsSummary = useMemo(() => summarizeDemoCallsLeads(demoCallLeads), [demoCallLeads]);
 

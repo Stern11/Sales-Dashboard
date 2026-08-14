@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { EMPTY_ARRAY } from "../../lib/empty.js";
 import { AsyncState } from "../../components/AsyncState.jsx";
 import { StatusPill } from "../../components/StatusPill.jsx";
 import { useHubspotEngagements } from "./useDemoCallsData.js";
@@ -68,7 +69,7 @@ export function ImportFromHubspotPanel({ contactId, onImport, importing }) {
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [outcomes, setOutcomes] = useState({});
 
-  const engagements = data?.engagements || [];
+  const engagements = data?.engagements ?? EMPTY_ARRAY;
 
   function toggle(id) {
     setSelectedIds((prev) => {

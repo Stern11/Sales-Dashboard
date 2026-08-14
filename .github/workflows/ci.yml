@@ -1,0 +1,42 @@
+# Runs the checks that `npm run build` does not.
+#
+# Vercel's build command is `node scripts/migrate.js --if-configured && vite
+# build` (see vercel.json) — tests and lint are deliberately not in it, since
+# a deploy shouldn't be gated on a linter reaching the network. That means
+# nothing but this workflow stands between a broken commit and production,
+# because a push to main auto-deploys.
+#
+# Kept to one job: the suite is ~1s and has no database or network
+# dependencies (see vitest.config.js), so there is nothing to parallelize and
+# no services to stand up.
+
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      # `npm ci` rather than `npm install` — installs exactly what
+      # package-lock.json pins, so CI can't pass on a dependency tree that
+      # differs from the committed one.
+      - run: npm ci
+
+      - run: npm run lint
+
+      - run: npm test
+
+      # Catches the class of breakage tests can't see: a bad import path or a
+      # syntax error in a module no test imports.
+      - run: npx vite build

@@ -45,7 +45,7 @@ async function handleLogin(req, res) {
     try {
       const ticket = await client.verifyIdToken({ idToken: credential, audience: clientId });
       payload = ticket.getPayload();
-    } catch (err) {
+    } catch {
       throw new AuthError("Google sign-in couldn't be verified.");
     }
 

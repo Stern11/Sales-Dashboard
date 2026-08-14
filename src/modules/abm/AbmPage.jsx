@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { EMPTY_ARRAY } from "../../lib/empty.js";
 import { AsyncState } from "../../components/AsyncState.jsx";
 import { KpiRow } from "../../components/KpiRow.jsx";
 import { FunnelChart } from "../../components/FunnelChart.jsx";
@@ -26,7 +27,7 @@ function aggregateOverview(payloads) {
 export function AbmPage() {
   const { data: segmentsData, loading: segmentsLoading, error: segmentsError } = useSegments();
   const [segmentId, setSegmentId] = useState(null);
-  const segments = segmentsData?.segments || [];
+  const segments = segmentsData?.segments ?? EMPTY_ARRAY;
   const segmentIds = useMemo(() => segments.map((s) => s.id), [segments]);
   const hasMultipleSegments = segments.length > 1;
 

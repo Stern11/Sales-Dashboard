@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { EMPTY_ARRAY } from "../../lib/empty.js";
 import { useSearchParams } from "react-router-dom";
 import { AsyncState } from "../../components/AsyncState.jsx";
 import { KpiRow } from "../../components/KpiRow.jsx";
@@ -47,7 +48,7 @@ export function PipelinePage() {
   // refresh() triggered after the real mutation resolves.
   const [overrideLeads, setOverrideLeads] = useState(null);
   useEffect(() => { setOverrideLeads(null); }, [data]);
-  const leads = overrideLeads || data?.leads || [];
+  const leads = overrideLeads ?? data?.leads ?? EMPTY_ARRAY;
 
   const regionOptions = useMemo(() => {
     const counts = new Map();

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { EMPTY_ARRAY } from "../../lib/empty.js";
 import { usePipelineList } from "../pipeline/usePipelineData.js";
 import { stageMeta } from "../pipeline/constants.js";
 
@@ -15,7 +16,7 @@ import { stageMeta } from "../pipeline/constants.js";
 export function LinkExistingPipelineLeadPanel({ onLink, linking }) {
   const { data, loading } = usePipelineList();
   const [query, setQuery] = useState("");
-  const leads = data?.leads || [];
+  const leads = data?.leads ?? EMPTY_ARRAY;
 
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
