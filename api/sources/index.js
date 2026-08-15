@@ -1,4 +1,5 @@
-// GET /api/sources?period=lifetime|monthly|weekly — live attribution data:
+// GET /api/sources?period=lifetime|monthly|weekly|custom[&from=YYYY-MM-DD][&to=YYYY-MM-DD]
+// — live attribution data:
 // which channel (LinkedIn Ads, Paid Search, Organic, Offline, ...) each
 // contact came from, their lifecycle-stage progress, and how many meetings
 // have been booked with them. Powers the Performance Marketing page
@@ -37,7 +38,22 @@ const CONTACT_PROPERTIES = [
 ];
 const MEETING_PROPERTIES = ["hs_meeting_start_time", "hs_meeting_outcome", "hs_meeting_title"];
 
-function windowFilters(period) {
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Filters scoping the contacts search to a period. "custom" builds an
+ * explicit GTE/LTE range from `from`/`to` query params (either may be
+ * omitted for an open-ended range); anything that isn't a well-formed
+ * YYYY-MM-DD is ignored rather than passed through to HubSpot's filter API,
+ * which would otherwise reject the whole request over one bad query param.
+ */
+function windowFilters(period, from, to) {
+  if (period === "custom") {
+    const filters = [];
+    if (DATE_RE.test(from)) filters.push({ propertyName: "createdate", operator: "GTE", value: String(new Date(`${from}T00:00:00`).getTime()) });
+    if (DATE_RE.test(to)) filters.push({ propertyName: "createdate", operator: "LTE", value: String(new Date(`${to}T23:59:59.999`).getTime()) });
+    return filters;
+  }
   if (period === "lifetime") return [];
   const days = period === "monthly" ? 30 : 7;
   const start = new Date();
@@ -49,8 +65,8 @@ function channelFor(p) {
   return p.hs_analytics_source_data_1 || p.hs_analytics_source || "Unknown";
 }
 
-async function buildSourcesPayload(token, period) {
-  const filters = windowFilters(period);
+async function buildSourcesPayload(token, period, from, to) {
+  const filters = windowFilters(period, from, to);
 
   // Lifecycle stage definitions and meetings are independent of the contacts
   // fetch and cheap (1-2 requests each) — running them concurrently with the
@@ -120,6 +136,9 @@ async function buildSourcesPayload(token, period) {
 }
 
 export default async function handler(req, res) {
-  const period = ["monthly", "weekly"].includes(req.query.period) ? req.query.period : "lifetime";
-  await withHubspotErrorHandling(res, () => buildSourcesPayload(getToken(), period));
+  const { period: rawPeriod, from, to } = req.query;
+  const period = ["monthly", "weekly", "custom"].includes(rawPeriod) ? rawPeriod : "lifetime";
+  await withHubspotErrorHandling(res, () => buildSourcesPayload(getToken(), period, from, to));
 }
+
+export { windowFilters };

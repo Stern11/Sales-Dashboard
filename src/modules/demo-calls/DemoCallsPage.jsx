@@ -8,12 +8,12 @@ import { DemoCallsTable } from "./DemoCallsTable.jsx";
 import { DemoCallLeadDrawer } from "./DemoCallLeadDrawer.jsx";
 import { AddDemoCallLeadModal } from "./AddDemoCallLeadModal.jsx";
 import { DeleteDemoCallLeadModal } from "./DeleteDemoCallLeadModal.jsx";
-import { DateRangeFilter } from "./DateRangeFilter.jsx";
+import { DateRangeFilter } from "../../components/DateRangeFilter.jsx";
 import { WeeklyTrendChart } from "./WeeklyTrendChart.jsx";
 import { useDemoCallsList } from "./useDemoCallsData.js";
 import { useDemoCallsMutations } from "./useDemoCallsMutations.js";
 import { useLiveDemoCallContacts } from "./useLiveDemoCallContacts.js";
-import { summarizeLeads, resolvePeriodRange, isWithinRange, weeklyFunnelTrend, bookedDateOf } from "./constants.js";
+import { summarizeLeads, resolvePeriodRange, isWithinRange, weeklyFunnelTrend, bookedDateOf, BOOKED_PERIOD_OPTIONS } from "./constants.js";
 import { demoCallLeadToPipelinePrefill } from "../../lib/pipelineIntegration.js";
 import { usePipelineMutations } from "../pipeline/usePipelineMutations.js";
 import { useNameTagContext } from "../../context/NameTagContext.jsx";
@@ -85,14 +85,12 @@ export function DemoCallsPage() {
     [liveContacts, trackedHubspotIds]
   );
 
-  // "Booked" = bookedDateOf() (the first logged call's date, falling back to
-  // created_at only if no call's been logged yet — see constants.js). Not
-  // created_at alone: a lead imported/backfilled long after its real meeting
-  // happened would otherwise show as "booked" the week it was entered into
-  // this dashboard, not the week the meeting actually took place. The date
+  // "Booked" = bookedDateOf() = created_at — when the lead was added to this
+  // list, not when its first call happened (see constants.js). The date
   // filter only scopes the funnel/KPIs and the tracked half of the table —
   // untracked/"virtual" rows (not booked yet) always show regardless of the
-  // selected period.
+  // selected period, aside from the one-time age cutoff in
+  // useLiveDemoCallContacts.js.
   const { from, to } = useMemo(() => resolvePeriodRange(period, customFrom, customTo), [period, customFrom, customTo]);
   const bookedLeads = useMemo(
     () => (from || to ? leads.filter((l) => isWithinRange(bookedDateOf(l), from, to)) : leads),
@@ -188,6 +186,7 @@ export function DemoCallsPage() {
           <>
             <div className="pipeline-toolbar">
               <DateRangeFilter
+                options={BOOKED_PERIOD_OPTIONS}
                 period={period}
                 onPeriodChange={setPeriod}
                 customFrom={customFrom}

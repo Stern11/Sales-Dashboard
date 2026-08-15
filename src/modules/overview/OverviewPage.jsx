@@ -4,9 +4,10 @@ import { AsyncState } from "../../components/AsyncState.jsx";
 import { KpiRow } from "../../components/KpiRow.jsx";
 import { PageMeta } from "../../components/Sidebar.jsx";
 import { OverviewTrendTable } from "./OverviewTrendTable.jsx";
+import { WeeklyFunnelTable } from "./WeeklyFunnelTable.jsx";
 import { buildMonthlyOverview } from "./overviewMath.js";
 import { useDemoCallsList } from "../demo-calls/useDemoCallsData.js";
-import { summarizeLeads as summarizeDemoCallsLeads } from "../demo-calls/constants.js";
+import { summarizeLeads as summarizeDemoCallsLeads, weeklyFunnelTrend } from "../demo-calls/constants.js";
 import { usePipelineList } from "../pipeline/usePipelineData.js";
 import { summarizeLeads as summarizePipelineLeads, currency } from "../pipeline/constants.js";
 
@@ -45,6 +46,9 @@ export function OverviewPage() {
     () => buildMonthlyOverview(pipelineLeads, demoCallLeads),
     [pipelineLeads, demoCallLeads]
   );
+  // Its own time dimension already (one column per week) — not scoped to any
+  // period filter, same reasoning as DemoCallsPage's own weeklyTrend.
+  const weeklyFunnelBuckets = useMemo(() => weeklyFunnelTrend(demoCallLeads), [demoCallLeads]);
 
   function refreshAll() {
     refreshPipeline();
@@ -72,6 +76,15 @@ export function OverviewPage() {
                 { label: "Closed Won", value: currency.format(pipelineSummary.closed_won_value) },
               ]}
             />
+            <section>
+              <h2>Weekly Funnel</h2>
+              <p className="subtitle" style={{ marginBottom: 10 }}>
+                Of the leads added to the Demo Calls list each week, how many went on to have a
+                meeting booked, complete a first call, and become a Pipeline opportunity. A recent
+                week's later columns will keep climbing as those leads progress.
+              </p>
+              <WeeklyFunnelTable buckets={weeklyFunnelBuckets} />
+            </section>
             <section>
               <h2>Monthly Trend</h2>
               <p className="subtitle" style={{ marginBottom: 10 }}>

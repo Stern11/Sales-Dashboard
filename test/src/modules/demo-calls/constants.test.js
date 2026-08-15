@@ -168,13 +168,16 @@ describe("summarizeLeads", () => {
 });
 
 describe("bookedDateOf", () => {
-  it("prefers first_call_date over created_at when a call's been logged", () => {
-    const lead = { first_call_date: "2026-03-18", created_at: "2026-08-09T06:22:10.546Z" };
-    expect(bookedDateOf(lead)).toBe("2026-03-18T00:00:00");
-  });
-  it("falls back to created_at when no call's been logged yet", () => {
-    const lead = { first_call_date: null, created_at: "2026-08-09T06:22:10.546Z" };
-    expect(bookedDateOf(lead)).toBe("2026-08-09T06:22:10.546Z");
+  // "Booked" is when the lead was added to the Demo Calls list, full stop —
+  // it used to prefer the call log's first_call_date when one existed, which
+  // made a lead added this week but not yet called bucket into whatever week
+  // its (still-future) call eventually happens, and made a lead's "booked"
+  // date silently change meaning the moment a call got logged.
+  it("is always created_at, regardless of whether a call's been logged", () => {
+    const withCall = { first_call_date: "2026-03-18", created_at: "2026-08-09T06:22:10.546Z" };
+    const withoutCall = { first_call_date: null, created_at: "2026-08-09T06:22:10.546Z" };
+    expect(bookedDateOf(withCall)).toBe("2026-08-09T06:22:10.546Z");
+    expect(bookedDateOf(withoutCall)).toBe("2026-08-09T06:22:10.546Z");
   });
 });
 
@@ -193,15 +196,26 @@ describe("weeklyFunnelTrend", () => {
   // dedicated MIN_TREND_WEEK_START tests below for the floor itself.
   const NO_FLOOR = "2000-01-01";
 
-  it("buckets a backfilled lead by its first_call_date, not the created_at row-insert time — the bug this was built to fix: a lead imported long after its real meeting would otherwise pile into whatever week it was entered", () => {
+  it("buckets a lead by created_at (when it was added), ignoring first_call_date entirely", () => {
     const buckets = weeklyFunnelTrend([
-      // Inserted into the DB "now" (e.g. a bulk import), but the real
-      // meeting was 5 weeks ago per the call log.
+      // Added to the list now, but the call it eventually got was logged for
+      // a date 5 weeks in the past (e.g. backfilling an old meeting's notes).
+      // That must not drag this lead's "booked" week back with it.
       { created_at: new Date().toISOString(), first_call_date: weeksAgoIso(5).slice(0, 10), call_count: 1, status: "active", pipeline_lead_id: null },
     ], 8, NO_FLOOR);
-    expect(buckets).toHaveLength(6); // 5 weeks ago through the current week
+    expect(buckets).toHaveLength(1); // booked this week only, not 5 weeks back
     expect(buckets[0].booked).toBe(1);
-    expect(buckets.slice(1).reduce((sum, b) => sum + b.booked, 0)).toBe(0);
+  });
+
+  it("counts meetings_booked for a bucket's leads that have any call logged, regardless of status", () => {
+    const now = new Date().toISOString();
+    const [bucket] = weeklyFunnelTrend([
+      { created_at: now, call_count: 1, status: "active", pipeline_lead_id: null },
+      { created_at: now, call_count: 2, status: "irrelevant", pipeline_lead_id: null },
+      { created_at: now, call_count: 0, status: "active", pipeline_lead_id: null },
+    ], 8, NO_FLOOR);
+    expect(bucket.booked).toBe(3);
+    expect(bucket.meetings_booked).toBe(2);
   });
 
   it("with no leads booked yet, shows a single bucket for just the current week", () => {

@@ -14,12 +14,14 @@ A live, HubSpot-backed dashboard, behind Google sign-in restricted to
   (Postgres via Neon) — everything else is still a live, read-only HubSpot
   view.
 - **Performance Marketing** — LinkedIn Ads leads, meetings booked, and a
-  lifecycle-stage funnel scoped to that channel (lifetime/monthly/weekly).
+  lifecycle-stage funnel scoped to that channel (lifetime/monthly/weekly, or
+  a custom date range).
   Ad spend and live-campaign count are wired up but scope-blocked on the
   current HubSpot plan — see
   [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#performance-marketing--two-independently-gated-data-sources).
-- **Overview** — the app's landing page: pipeline and meeting KPIs plus a
-  monthly trend table, aggregated across the database-backed modules.
+- **Overview** — the app's landing page: pipeline and meeting KPIs, a
+  week-on-week funnel (Leads → Meetings Booked → First Call → Opportunity)
+  and a monthly trend table, aggregated across the database-backed modules.
 - **Account Expansion** — account planning for existing clients (expansion
   areas, whitespace, research signals, stakeholders, open questions), as
   opposed to ABM's prospects. Database-backed, with a portfolio list and a

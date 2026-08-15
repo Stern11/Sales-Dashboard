@@ -100,18 +100,21 @@ export function formatCallDate(dateStr) {
 /** Same parsing as formatCallDate(), compact — for table cells rather than a detail page. */
 
 /**
- * The date a lead's meeting was actually booked for — the real source of
- * truth is the call log entry a rep enters (first_call_date, the call_date
- * of call #1), not demo_call_leads.created_at. created_at is only a
- * fallback for a lead with no call logged yet: it's when the tracking row
- * itself was inserted, which for a historically backfilled/imported lead
- * can land on a completely different (much more recent) week than when the
- * meeting actually happened — bucketing or filtering on created_at alone
- * would pile up old, imported leads into whatever week they happened to be
- * entered, rather than the week they were really booked for.
+ * The date a lead counts as "booked" — when it was added to the Demo Calls
+ * list (demo_call_leads.created_at), not when its first call happened.
+ *
+ * This used to prefer the call log's first_call_date when one existed, on
+ * the theory that a backfilled/imported lead's row-insert time could land
+ * weeks after its real meeting. In practice that made "booked" mean two
+ * different things depending on whether a call had been logged yet, so the
+ * same KPI/date filter silently changed definition under a rep's feet. Now
+ * it's always created_at: "Booked" answers "when did this enter the demo
+ * call list", full stop. "First Call" is tracked separately (first_call_date
+ * / first_call_outcome, driven entirely by the call_date a rep enters when
+ * logging it) and isn't affected by this.
  */
 export function bookedDateOf(lead) {
-  return lead.first_call_date ? `${lead.first_call_date}T00:00:00` : lead.created_at;
+  return lead.created_at;
 }
 
 /** Mirrors summarize() in lib/demo-calls/queries.js — recomputed client-side for whatever filter is currently applied. */
@@ -165,10 +168,11 @@ function isoDate(date) {
 /**
  * One bar per series in the weekly funnel trend chart — fixed order/color,
  * reusing this app's existing stage/status tokens rather than a new palette.
- * Only 3 of the 5 metrics weeklyFunnelTrend() computes per week are charted
- * (Booked, Meeting 1 Done, Added to Pipeline) — Meeting 2 Done and Irrelevant
- * are rarer/secondary and dropping them keeps each week's group of bars
- * readable. The bucket objects still carry call_2_done/irrelevant either way.
+ * Only 3 of the 6 metrics weeklyFunnelTrend() computes per week are charted
+ * here (Booked, Meeting 1 Done, Added to Pipeline) — Meeting 2 Done,
+ * Irrelevant, and Meetings Booked (the Overview page's own weekly funnel
+ * table uses that last one instead) are dropped to keep each week's group of
+ * bars readable. The bucket objects carry all of them either way.
  */
 export const FUNNEL_TREND_SERIES = [
   { key: "booked", label: "Booked", color: "var(--stage-sql)" },
@@ -185,6 +189,16 @@ export const FUNNEL_TREND_SERIES = [
 // the underlying grow/cap/roll logic on its own, independent of this
 // temporary business-specific date.
 export const MIN_TREND_WEEK_START = "2026-08-03";
+
+/**
+ * Floor for the "Not Logged" virtual rows on the Meetings page (see
+ * useLiveDemoCallContacts.js) — a contact that reached the Demo Call stage
+ * before this date is old backlog nobody's following up on and, unlike a
+ * tracked lead, has no dismiss/mark-irrelevant action of its own to clear it
+ * with. One-time cleanup per product decision (2026-08-15); raise it again
+ * by hand if the backlog piles up the same way in the future.
+ */
+export const MIN_LIVE_CONTACT_DATE = "2026-08-01";
 
 /**
  * Week-on-week cohort breakdown, computed entirely client-side from the
@@ -224,7 +238,7 @@ export function weeklyFunnelTrend(leads, maxWeeks = 8, floorWeekStartIso = MIN_T
     const d = new Date(currentWeekStart);
     d.setUTCDate(d.getUTCDate() - i * 7);
     const week_start = isoDate(d);
-    buckets.set(week_start, { week_start, booked: 0, call_1_done: 0, call_2_done: 0, added_to_pipeline: 0, irrelevant: 0 });
+    buckets.set(week_start, { week_start, booked: 0, meetings_booked: 0, call_1_done: 0, call_2_done: 0, added_to_pipeline: 0, irrelevant: 0 });
   }
 
   for (const l of leads) {
@@ -235,6 +249,12 @@ export function weeklyFunnelTrend(leads, maxWeeks = 8, floorWeekStartIso = MIN_T
     const bucket = buckets.get(key);
     if (!bucket) continue; // booked before the visible window
     bucket.booked += 1;
+    // "Of this week's leads, how many have an actual call scheduled/logged"
+    // — the funnel's second stage (see the Overview page's weekly funnel).
+    // Unlike call_1_done below, this isn't gated on status === "active": a
+    // call having been booked is a fact about what happened, and doesn't
+    // get erased by the lead later being marked irrelevant.
+    if ((Number(l.call_count) || 0) > 0) bucket.meetings_booked += 1;
     // Matches summarizeLeads()'s semantics: call progress is only counted
     // for currently-active leads (irrelevant is its own bucket, a side
     // branch — same "active vs. side-state" split Sales Pipeline uses for

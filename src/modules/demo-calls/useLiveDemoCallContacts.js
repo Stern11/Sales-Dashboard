@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useSegments, useAllAbmData } from "../abm/useAbmData.js";
 import { useAdLeadsData } from "../marketing/useMarketingData.js";
 import { guessCompanyFromEmail } from "../../lib/pipelineIntegration.js";
+import { MIN_LIVE_CONTACT_DATE } from "./constants.js";
 
 /**
  * Live, read-only detection of "who's reached the Demo Call stage" — reused
@@ -30,6 +31,7 @@ export function useLiveDemoCallContacts() {
           company_name: l.company || "",
           contact_name: `${l.first || ""} ${l.last || ""}`.trim() || l.email || "(no name)",
           email: l.email || "",
+          created_at: l.created_at || null,
         });
       }
     }
@@ -48,12 +50,19 @@ export function useLiveDemoCallContacts() {
             company_name: guessCompanyFromEmail(l.email),
             contact_name: l.name || "",
             email: l.email || "",
+            created_at: l.created_at || null,
           });
         }
       }
     }
 
-    return [...byContactId.values()];
+    // One-time backlog cleanup (see MIN_LIVE_CONTACT_DATE) — a contact with
+    // no known created_at is kept rather than hidden, since there's no way
+    // to tell how old it actually is.
+    const cutoff = new Date(`${MIN_LIVE_CONTACT_DATE}T00:00:00Z`).getTime();
+    return [...byContactId.values()].filter(
+      (c) => !c.created_at || new Date(c.created_at).getTime() >= cutoff
+    );
   }, [abmDataById, sourcesData]);
 
   return { liveContacts, loading: segmentsLoading || abmLoading || sourcesLoading };

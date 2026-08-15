@@ -1,8 +1,8 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AsyncState } from "../../components/AsyncState.jsx";
 import { KpiRow } from "../../components/KpiRow.jsx";
 import { FunnelChart } from "../../components/FunnelChart.jsx";
-import { PeriodToggle } from "../../components/PeriodToggle.jsx";
+import { DateRangeFilter } from "../../components/DateRangeFilter.jsx";
 import { PageMeta } from "../../components/Sidebar.jsx";
 import { AdLeadsTable } from "./AdLeadsTable.jsx";
 import { useAdLeadsData, useAdSpendData } from "./useMarketingData.js";
@@ -14,6 +14,7 @@ const PERIOD_OPTIONS = [
   { value: "lifetime", label: "Lifetime" },
   { value: "monthly", label: "Monthly" },
   { value: "weekly", label: "Weekly" },
+  { value: "custom", label: "Custom Range" },
 ];
 
 const currency = new Intl.NumberFormat(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 });
@@ -24,7 +25,9 @@ const AD_CHANNEL = "linkedin";
 
 export function MarketingPage() {
   const [period, setPeriod] = useState("lifetime");
-  const { data, loading, error, refresh } = useAdLeadsData(period);
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
+  const { data, loading, error, refresh } = useAdLeadsData(period, customFrom, customTo);
   const spend = useAdSpendData();
 
   const stageLabel = (value) => data?.stages.find((s) => s.value === value)?.label || value;
@@ -83,6 +86,11 @@ export function MarketingPage() {
   const [bulkLoading, setBulkLoading] = useState(false);
   const [bulkStatus, setBulkStatus] = useState(null);
 
+  // A period/range switch changes which leads are even visible — drop any
+  // selection made under the old filter rather than silently bulk-adding
+  // leads no longer on screen (same pattern as DemoCallsPage's own filters).
+  useEffect(() => { setSelectedIds(new Set()); setBulkStatus(null); }, [period, customFrom, customTo]);
+
   function toggleSelect(contactId) {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -114,7 +122,15 @@ export function MarketingPage() {
   return (
     <div>
       <div className="pipeline-toolbar">
-        <PeriodToggle options={PERIOD_OPTIONS} value={period} onChange={setPeriod} />
+        <DateRangeFilter
+          options={PERIOD_OPTIONS}
+          period={period}
+          onPeriodChange={setPeriod}
+          customFrom={customFrom}
+          customTo={customTo}
+          onCustomFromChange={setCustomFrom}
+          onCustomToChange={setCustomTo}
+        />
         {data && <PageMeta lastUpdated={data.generated_at} onRefresh={refresh} style={{ marginBottom: 0 }} />}
       </div>
       <AsyncState loading={loading} error={error}>

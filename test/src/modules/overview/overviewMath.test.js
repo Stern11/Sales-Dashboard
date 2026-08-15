@@ -55,7 +55,7 @@ describe("buildMonthlyOverview", () => {
     expect(buckets).toHaveLength(12);
   });
 
-  it("counts meetings booked into the month matching bookedDateOf() (first_call_date, falling back to created_at)", () => {
+  it("counts meetings booked into the month matching bookedDateOf() (created_at — when the lead was added)", () => {
     const buckets = buildMonthlyOverview([], [
       demoCallLead(isoMonthsAgo(1)),
       demoCallLead(isoMonthsAgo(0)),

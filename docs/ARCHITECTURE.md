@@ -40,7 +40,7 @@ mistaken for a route. Only files that are meant to be hit as
 api/
   segments.js             → GET /api/segments
   abm/index.js             → GET /api/abm?segment=<id>
-  sources/index.js         → GET /api/sources?period=<lifetime|monthly|weekly> (channel attribution, all channels — Performance Marketing filters to LinkedIn)
+  sources/index.js         → GET /api/sources?period=<lifetime|monthly|weekly|custom>[&from=][&to=] (channel attribution, all channels — Performance Marketing filters to LinkedIn)
   marketing/spend.js       → GET /api/marketing/spend (ad spend + live campaign count — scope-blocked, see below)
   pipeline/index.js        → GET/POST /api/pipeline (list+summary / create) — database-backed, not HubSpot
   pipeline/[id]/index.js   → GET/PATCH/DELETE /api/pipeline/:id (detail / edit fields / delete),
