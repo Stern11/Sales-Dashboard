@@ -6,18 +6,27 @@ describe("windowFilters", () => {
     expect(windowFilters("lifetime")).toEqual([]);
   });
 
-  it("monthly is a rolling ~30-day GTE filter", () => {
+  // Calendar-aligned (the 1st of the month; the Monday of the week) in UTC,
+  // not a trailing 30/7-day window — "Monthly" on Aug 2 must mean just Aug
+  // 1-2, not reaching back into July.
+  it("monthly starts at midnight UTC on the 1st of the current month", () => {
     const [filter] = windowFilters("monthly");
     expect(filter.propertyName).toBe("createdate");
     expect(filter.operator).toBe("GTE");
-    const days = (Date.now() - Number(filter.value)) / (24 * 60 * 60 * 1000);
-    expect(days).toBeCloseTo(30, 0);
+    const now = new Date();
+    const start = new Date(Number(filter.value));
+    expect([start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate(), start.getUTCHours()])
+      .toEqual([now.getUTCFullYear(), now.getUTCMonth(), 1, 0]);
   });
 
-  it("weekly is a rolling ~7-day GTE filter", () => {
+  it("weekly starts at midnight UTC on the Monday of the current week", () => {
     const [filter] = windowFilters("weekly");
-    const days = (Date.now() - Number(filter.value)) / (24 * 60 * 60 * 1000);
-    expect(days).toBeCloseTo(7, 0);
+    const start = new Date(Number(filter.value));
+    expect(start.getUTCDay()).toBe(1); // Monday
+    expect(start.getUTCHours()).toBe(0);
+    expect(start.getTime()).toBeLessThanOrEqual(Date.now());
+    const daysSince = (Date.now() - start.getTime()) / (24 * 60 * 60 * 1000);
+    expect(daysSince).toBeLessThan(7);
   });
 
   describe("custom", () => {

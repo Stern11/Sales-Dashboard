@@ -273,10 +273,15 @@ export function weeklyFunnelTrend(leads, maxWeeks = 8, floorWeekStartIso = MIN_T
   return [...buckets.values()];
 }
 
-// Rolling windows, not calendar-aligned — matches the only other period
-// control in the app (Performance Marketing's Lifetime/Monthly/Weekly
-// toggle, `windowFilters()` in api/sources/index.js: "last 30/7 days from
-// now", not Monday-aligned weeks or 1st-of-month).
+// Calendar-aligned, not rolling windows — "This Month" on Aug 15 means Aug 1
+// onward, not mid-July onward, and "This Week" means the current
+// Monday-through-Sunday, matching the Monday-start weeks weeklyFunnelTrend()
+// already buckets by (above) — so "This Week" here and "the current column"
+// on the weekly funnel always agree on where the week boundary falls.
+// Performance Marketing's Lifetime/Monthly/Weekly toggle uses the same
+// calendar-aligned rule server-side (`windowFilters()` in
+// api/sources/index.js), just anchored in UTC rather than local time since
+// it runs in a serverless function with no "local" of its own.
 export const BOOKED_PERIOD_OPTIONS = [
   { value: "week", label: "This Week" },
   { value: "month", label: "This Month" },
@@ -284,17 +289,26 @@ export const BOOKED_PERIOD_OPTIONS = [
   { value: "custom", label: "Custom Range" },
 ];
 
+function startOfLocalWeek(date) {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  const day = d.getDay(); // 0=Sun..6=Sat
+  d.setDate(d.getDate() + ((day === 0 ? -6 : 1) - day)); // back to Monday
+  return d;
+}
+
 /**
  * Resolves a period selection to a {from, to} Date range (either bound may
- * be null, meaning unbounded). "week"/"month" are rolling windows ending
- * now; "custom" parses the two <input type="date"> value strings (`to` is
- * treated as inclusive of that whole day); "all" (or an unrecognized value)
- * is fully unbounded.
+ * be null, meaning unbounded). "week" is the current calendar week (Monday
+ * through now); "month" is the current calendar month (the 1st through
+ * now) — neither is a rolling trailing window. "custom" parses the two
+ * <input type="date"> value strings (`to` is treated as inclusive of that
+ * whole day); "all" (or an unrecognized value) is fully unbounded.
  */
 export function resolvePeriodRange(period, customFrom, customTo) {
   const now = new Date();
-  if (period === "week") return { from: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000), to: null };
-  if (period === "month") return { from: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000), to: null };
+  if (period === "week") return { from: startOfLocalWeek(now), to: null };
+  if (period === "month") return { from: new Date(now.getFullYear(), now.getMonth(), 1), to: null };
   if (period === "custom") {
     const from = customFrom ? new Date(`${customFrom}T00:00:00`) : null;
     const to = customTo ? new Date(`${customTo}T23:59:59.999`) : null;

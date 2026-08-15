@@ -16,18 +16,26 @@ describe("resolvePeriodRange", () => {
     expect(resolvePeriodRange("bogus")).toEqual({ from: null, to: null });
   });
 
-  it("'week' is a rolling 7-day window ending now (unbounded upper end)", () => {
+  // Calendar-aligned, not a trailing window: "This Week" is the current
+  // Monday through now, "This Month" is the 1st of the current month
+  // through now — on Aug 15, "This Month" must not reach back into July.
+  it("'week' starts at the most recent Monday, 00:00 local (unbounded upper end)", () => {
     const { from, to } = resolvePeriodRange("week");
     expect(to).toBeNull();
-    const days = (Date.now() - from.getTime()) / (24 * 60 * 60 * 1000);
-    expect(days).toBeCloseTo(7, 1);
+    expect(from.getHours()).toBe(0);
+    expect(from.getMinutes()).toBe(0);
+    expect(from.getDay()).toBe(1); // Monday
+    expect(from.getTime()).toBeLessThanOrEqual(Date.now());
+    const daysSince = (Date.now() - from.getTime()) / (24 * 60 * 60 * 1000);
+    expect(daysSince).toBeLessThan(7);
   });
 
-  it("'month' is a rolling 30-day window ending now", () => {
+  it("'month' starts at the 1st of the current calendar month, 00:00 local (unbounded upper end)", () => {
     const { from, to } = resolvePeriodRange("month");
     expect(to).toBeNull();
-    const days = (Date.now() - from.getTime()) / (24 * 60 * 60 * 1000);
-    expect(days).toBeCloseTo(30, 1);
+    const now = new Date();
+    expect([from.getFullYear(), from.getMonth(), from.getDate(), from.getHours()])
+      .toEqual([now.getFullYear(), now.getMonth(), 1, 0]);
   });
 
   it("'custom' parses both bounds (in local time — a date input has no timezone of its own), 'to' inclusive of the whole day", () => {

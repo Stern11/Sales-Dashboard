@@ -40,12 +40,34 @@ const MEETING_PROPERTIES = ["hs_meeting_start_time", "hs_meeting_outcome", "hs_m
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
+/** Midnight UTC on the Monday of `now`'s week. */
+function startOfUtcWeek(now) {
+  const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const day = d.getUTCDay(); // 0=Sun..6=Sat
+  d.setUTCDate(d.getUTCDate() + ((day === 0 ? -6 : 1) - day));
+  return d;
+}
+
+/** Midnight UTC on the 1st of `now`'s month. */
+function startOfUtcMonth(now) {
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+}
+
 /**
- * Filters scoping the contacts search to a period. "custom" builds an
- * explicit GTE/LTE range from `from`/`to` query params (either may be
- * omitted for an open-ended range); anything that isn't a well-formed
- * YYYY-MM-DD is ignored rather than passed through to HubSpot's filter API,
- * which would otherwise reject the whole request over one bad query param.
+ * Filters scoping the contacts search to a period.
+ *
+ * "monthly"/"weekly" are calendar-aligned (the 1st of the current month;
+ * the Monday of the current week), not a trailing 30/7-day window — "This
+ * Month" on the 2nd of August means just those two days, not late July
+ * onward. Anchored in UTC since this runs in a serverless function with no
+ * "local" timezone of its own; matches the UTC-anchored week bucketing
+ * src/modules/demo-calls/constants.js already uses for the same reason.
+ *
+ * "custom" builds an explicit GTE/LTE range from `from`/`to` query params
+ * (either may be omitted for an open-ended range); anything that isn't a
+ * well-formed YYYY-MM-DD is ignored rather than passed through to
+ * HubSpot's filter API, which would otherwise reject the whole request
+ * over one bad query param.
  */
 function windowFilters(period, from, to) {
   if (period === "custom") {
@@ -55,9 +77,8 @@ function windowFilters(period, from, to) {
     return filters;
   }
   if (period === "lifetime") return [];
-  const days = period === "monthly" ? 30 : 7;
-  const start = new Date();
-  start.setDate(start.getDate() - days);
+  const now = new Date();
+  const start = period === "monthly" ? startOfUtcMonth(now) : startOfUtcWeek(now);
   return [{ propertyName: "createdate", operator: "GTE", value: String(start.getTime()) }];
 }
 
