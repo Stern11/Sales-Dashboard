@@ -9,7 +9,8 @@
     "build": "node scripts/migrate.js --if-configured && vite build",
     "lint": "eslint .",
     "test": "vitest run",
-    "migrate": "node --env-file=.env.local scripts/migrate.js"
+    "migrate": "node --env-file=.env.local scripts/migrate.js",
+    "backfill:demo-stage-dates": "node --env-file=.env.local scripts/backfill-demo-stage-dates.js"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",

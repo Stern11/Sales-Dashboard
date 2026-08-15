@@ -3,7 +3,9 @@ import { sessionCookie } from "../../helpers/session.js";
 import handler from "../../../api/demo-calls/index.js";
 import * as queries from "../../../lib/demo-calls/queries.js";
 import * as hubspot from "../../../lib/hubspot.js";
+import * as abm from "../../../lib/abm.js";
 import * as hubspotEngagements from "../../../lib/demo-calls/hubspotEngagements.js";
+import * as hubspotStageHistory from "../../../lib/demo-calls/hubspotStageHistory.js";
 
 vi.mock("../../../lib/demo-calls/queries.js", () => ({
   listLeads: vi.fn(),
@@ -18,8 +20,16 @@ vi.mock("../../../lib/hubspot.js", async () => {
   return { ...actual, getToken: vi.fn() };
 });
 
+vi.mock("../../../lib/abm.js", () => ({
+  getLifecycleStages: vi.fn(),
+}));
+
 vi.mock("../../../lib/demo-calls/hubspotEngagements.js", () => ({
   fetchEngagementsForContact: vi.fn(),
+}));
+
+vi.mock("../../../lib/demo-calls/hubspotStageHistory.js", () => ({
+  fetchStageEnteredAt: vi.fn(),
 }));
 
 // Write routes resolve their actor from the session cookie (lib/auth/actor.js),
@@ -166,5 +176,56 @@ describe("POST /api/demo-calls", () => {
     const { req, res } = mockReqRes({ method: "DELETE" });
     await handler(req, res);
     expect(res.statusCode).toBe(405);
+  });
+
+  describe("demo_stage_entered_at lookup", () => {
+    it("skips the HubSpot lookup entirely for a manual entry (no hubspot_contact_id)", async () => {
+      queries.createLead.mockResolvedValue({ id: "11111111-1111-4111-8111-111111111111" });
+      const { req, res } = mockReqRes({ method: "POST", body: { company_name: "Acme", contact_name: "Jane", actor: "Aryan" } });
+      await handler(req, res);
+      expect(res.statusCode).toBe(200);
+      expect(hubspot.getToken).not.toHaveBeenCalled();
+      expect(queries.createLead).toHaveBeenCalledWith(expect.objectContaining({ demo_stage_entered_at: null }));
+    });
+
+    it("looks up and stores demo_stage_entered_at for a lead with a hubspot_contact_id", async () => {
+      queries.getLeadByHubspotContactId.mockResolvedValue(null);
+      hubspot.getToken.mockReturnValue("tok");
+      abm.getLifecycleStages.mockResolvedValue([{ value: "opportunity", label: "Opportunity" }]);
+      hubspotStageHistory.fetchStageEnteredAt.mockResolvedValue("2026-06-29T10:00:00.000Z");
+      queries.createLead.mockResolvedValue({ id: "11111111-1111-4111-8111-111111111111" });
+
+      const { req, res } = mockReqRes({
+        method: "POST",
+        body: { company_name: "Acme", contact_name: "Jane", actor: "Aryan", hubspot_contact_id: "999" },
+      });
+      await handler(req, res);
+
+      expect(res.statusCode).toBe(200);
+      expect(hubspotStageHistory.fetchStageEnteredAt).toHaveBeenCalledWith("tok", "999", expect.any(Array), "opportunity");
+      expect(queries.createLead).toHaveBeenCalledWith(
+        expect.objectContaining({ hubspot_contact_id: "999", demo_stage_entered_at: "2026-06-29T10:00:00.000Z" })
+      );
+    });
+
+    // The lookup is best-effort: a missing token, a HubSpot outage, or a
+    // scope error must never block the lead from being created — it just
+    // falls back to created_at, same as it always has.
+    it("still creates the lead when the HubSpot lookup fails", async () => {
+      queries.getLeadByHubspotContactId.mockResolvedValue(null);
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      hubspot.getToken.mockImplementation(() => { throw new Error("HUBSPOT_TOKEN not set"); });
+      queries.createLead.mockResolvedValue({ id: "11111111-1111-4111-8111-111111111111" });
+
+      const { req, res } = mockReqRes({
+        method: "POST",
+        body: { company_name: "Acme", contact_name: "Jane", actor: "Aryan", hubspot_contact_id: "999" },
+      });
+      await handler(req, res);
+
+      expect(res.statusCode).toBe(200);
+      expect(queries.createLead).toHaveBeenCalledWith(expect.objectContaining({ demo_stage_entered_at: null }));
+      console.error.mockRestore();
+    });
   });
 });

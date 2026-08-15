@@ -1,0 +1,22 @@
+-- A second, more accurate "Booked" date, sourced from HubSpot rather than
+-- this table's own created_at.
+--
+-- created_at is when a demo_call_leads row was inserted — for a lead an SDR
+-- tracks the same day they call it, that's accurate. But for a lead someone
+-- gets around to tracking days or weeks after it actually reached the Demo
+-- Call stage in HubSpot (or backfills via "Import from HubSpot"), created_at
+-- reflects data-entry timing, not reality — which is exactly what produced
+-- a lead reading "Booked this week" with a meeting logged for a date months
+-- earlier.
+--
+-- demo_stage_entered_at is the date HubSpot's own lifecyclestage property
+-- history says the contact first reached the Demo Call stage (or a stage
+-- beyond it) — see lib/demo-calls/hubspotStageHistory.js. Nullable: it's
+-- looked up best-effort at creation time for a lead with a
+-- hubspot_contact_id, and left null (falling back to created_at — see
+-- bookedDateOf() in src/modules/demo-calls/constants.js) for manual entries,
+-- or when HubSpot has no history on file, or the lookup fails. Existing
+-- leads are backfilled once via scripts/backfill-demo-stage-dates.js, not by
+-- this migration — a schema change and a data backfill are different kinds
+-- of risk and this repo keeps them separate.
+alter table demo_call_leads add column if not exists demo_stage_entered_at timestamptz;

@@ -93,6 +93,12 @@ create table demo_call_leads (
   added_to_pipeline_at  timestamptz,
   company_scale         text,
   source                text,
+  -- The date HubSpot's lifecyclestage history says this contact first
+  -- reached the Demo Call stage — a more accurate "Booked" date than
+  -- created_at (when this row was inserted) for a lead tracked well after
+  -- the fact. Null for manual entries, or when the lookup found/had
+  -- nothing. See migration 0015 and lib/demo-calls/hubspotStageHistory.js.
+  demo_stage_entered_at timestamptz,
   created_by            text not null,
   updated_by            text not null,
   created_at            timestamptz not null default now(),
@@ -273,3 +279,6 @@ create index account_expansion_questions_account_id_idx on account_expansion_que
 --                      now-redundant non-unique index on the same columns
 --   0014 (2026-08-14): indexes matching the demo-calls and account-expansion list
 --                      endpoints' actual ORDER BY columns
+--   0015 (2026-08-15): demo_call_leads.demo_stage_entered_at — a HubSpot-sourced
+--                      Booked date, more accurate than created_at for a lead
+--                      tracked well after it reached the Demo Call stage

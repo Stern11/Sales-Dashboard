@@ -106,6 +106,22 @@ run `vercel env pull .env.local` to sync them down.
    human-readable snapshot of the full current schema (not run directly —
    `db/migrations/` is the source of truth).
 
+### Backfilling Demo Calls' Booked date from HubSpot
+
+`demo_call_leads.demo_stage_entered_at` (migration 0015) is looked up from
+HubSpot automatically for every *new* lead going forward, but existing leads
+need a one-time backfill:
+
+```
+npm run backfill:demo-stage-dates                                    # dev
+DATABASE_URL=<prod-url> HUBSPOT_TOKEN=<prod-token> \
+  node scripts/backfill-demo-stage-dates.js                          # prod
+```
+
+Safe to re-run — only leads still missing a date are touched. See the
+script's own header comment for what it does and why it's a manual script
+rather than part of the automatic migration step above.
+
 ### Dev vs. production data — use a separate Neon branch
 
 `DATABASE_URL` is a real, writable Postgres database — unlike the read-only

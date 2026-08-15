@@ -13,7 +13,8 @@ import { useDemoCallsMutations } from "./useDemoCallsMutations.js";
 import { usePipelineMutations } from "../pipeline/usePipelineMutations.js";
 import { demoCallLeadToPipelinePrefill } from "../../lib/pipelineIntegration.js";
 import { useNameTagContext } from "../../context/NameTagContext.jsx";
-import { statusMeta, effectiveStatus, COMPANY_SCALE_OPTIONS, SOURCE_CATEGORIES, SOURCE_OTHER } from "./constants.js";
+import { statusMeta, effectiveStatus, bookedDateOf, COMPANY_SCALE_OPTIONS, SOURCE_CATEGORIES, SOURCE_OTHER } from "./constants.js";
+import { confirmIfAnyBeforeBooked } from "./confirmBackdated.js";
 
 export function DemoCallLeadDrawer({ leadId, onClose, onChanged }) {
   const { data, loading, error, refresh } = useDemoCallLead(leadId);
@@ -102,6 +103,7 @@ export function DemoCallLeadDrawer({ leadId, onClose, onChanged }) {
   // on that read (same reasoning as AddDemoCallLeadModal's import handler).
   async function handleImportFromHubspot(payloads) {
     if (!payloads.length) return;
+    if (!confirmIfAnyBeforeBooked(payloads.map((p) => p.call_date), bookedDateOf(values))) return;
     const actor = await ensureName();
     if (!actor) return;
     setImporting(true);
@@ -282,7 +284,7 @@ export function DemoCallLeadDrawer({ leadId, onClose, onChanged }) {
 
             <div className="lead-detail-section lead-detail-section-featured">
               <h4>Meeting log</h4>
-              <CallLogTimeline leadId={leadId} calls={data.calls || []} onChanged={refresh} />
+              <CallLogTimeline leadId={leadId} calls={data.calls || []} bookedDate={bookedDateOf(values)} onChanged={refresh} />
             </div>
 
             <div className="lead-detail-section">

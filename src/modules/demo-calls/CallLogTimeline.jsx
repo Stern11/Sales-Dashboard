@@ -3,6 +3,7 @@ import { StatusPill } from "../../components/StatusPill.jsx";
 import { useDemoCallsMutations } from "./useDemoCallsMutations.js";
 import { useNameTagContext } from "../../context/NameTagContext.jsx";
 import { outcomeMeta, outcomeOptionsFor, relativeTime, formatCallDate } from "./constants.js";
+import { confirmIfBeforeBooked } from "./confirmBackdated.js";
 import { safeUrl } from "../../lib/safeUrl.js";
 
 const EMPTY_CALL_FORM = { call_date: "", outcome: "completed", notes: "", next_steps: "", transcript_url: "" };
@@ -69,12 +70,13 @@ function CallForm({ initial, onCancel, onSubmit, loading, submitLabel }) {
   );
 }
 
-function CallEntry({ call, onSaved }) {
+function CallEntry({ call, bookedDate, onSaved }) {
   const [editing, setEditing] = useState(false);
   const { updateCall, loading, error } = useDemoCallsMutations();
   const { ensureName } = useNameTagContext();
 
   async function handleSave(values) {
+    if (!confirmIfBeforeBooked(values.call_date, bookedDate)) return;
     const actor = await ensureName();
     if (!actor) return;
     try {
@@ -150,12 +152,13 @@ function CallEntry({ call, onSaved }) {
   );
 }
 
-export function CallLogTimeline({ leadId, calls, onChanged }) {
+export function CallLogTimeline({ leadId, calls, bookedDate, onChanged }) {
   const [adding, setAdding] = useState(calls.length === 0);
   const { addCall, loading, error } = useDemoCallsMutations();
   const { ensureName } = useNameTagContext();
 
   async function handleAdd(values) {
+    if (!confirmIfBeforeBooked(values.call_date, bookedDate)) return;
     const actor = await ensureName();
     if (!actor) return;
     try {
@@ -174,7 +177,7 @@ export function CallLogTimeline({ leadId, calls, onChanged }) {
     <div>
       <div className="notes-timeline" style={{ marginBottom: 14 }}>
         {calls.map((c) => (
-          <CallEntry key={c.id} call={{ ...c, lead_id: leadId }} onSaved={onChanged} />
+          <CallEntry key={c.id} call={{ ...c, lead_id: leadId }} bookedDate={bookedDate} onSaved={onChanged} />
         ))}
         {calls.length === 0 && !adding && <p className="notes-empty">No meetings logged yet.</p>}
       </div>

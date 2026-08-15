@@ -425,6 +425,38 @@ live stage list/order so this doesn't depend on a hardcoded assumption about
 stage order, and `meeting_done` is true once a lead's `lifecyclestage` index
 is at or past that stage.
 
+### "Booked" date: demo_stage_entered_at vs. created_at
+
+`bookedDateOf()` (`src/modules/demo-calls/constants.js`) — what every date
+filter, the weekly funnel, and the Overview trend bucket a lead by — prefers
+`demo_stage_entered_at` over `demo_call_leads.created_at`. The two can differ
+by weeks or months: `created_at` is when the tracking row was inserted,
+which for a lead an SDR tracks the same day they call it is accurate, but
+for one tracked well after the fact (or backfilled via "Import from
+HubSpot") reflects data-entry timing, not when the contact actually reached
+the Demo Call stage.
+
+`demo_stage_entered_at` (migration 0015) is the earliest entry in HubSpot's
+own `lifecyclestage` property history at or beyond the Demo Call stage —
+see `lib/demo-calls/hubspotStageHistory.js`. It's looked up automatically,
+best-effort, when a lead with a `hubspot_contact_id` is created
+(`lookupStageEnteredAt` in `api/demo-calls/index.js`); a lookup failure
+never blocks lead creation, it just leaves the column null and
+`bookedDateOf()` falls back to `created_at`. Existing leads from before this
+existed are backfilled once via `scripts/backfill-demo-stage-dates.js` (see
+README), not automatically — it makes real HubSpot API calls, which is a
+different kind of cost/failure mode than a schema migration.
+
+"First Call" (`first_call_date`/`first_call_outcome`, driven by the
+`call_date` a rep enters when logging a call) is unaffected by any of
+this — it's never inferred, only ever what was typed in. Logging a call
+dated before the lead's Booked date doesn't fail outright (`isBeforeBooked`
++ `confirmIfBeforeBooked`/`confirmIfAnyBeforeBooked` in
+`src/modules/demo-calls/confirmBackdated.js`) — it's a human-in-the-loop
+confirmation, not a hard rule, since "Import from HubSpot" legitimately
+backfills real historical meetings that can predate when a lead happened to
+get tracked here.
+
 ## Performance: caching and why there's no server-side "overview" endpoint
 
 Two things make repeat loads fast without changing what data is fetched:

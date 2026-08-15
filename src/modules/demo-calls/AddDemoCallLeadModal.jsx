@@ -4,9 +4,20 @@ import { useDemoCallsMutations } from "./useDemoCallsMutations.js";
 import { useNameTagContext } from "../../context/NameTagContext.jsx";
 import { ImportFromHubspotPanel } from "./ImportFromHubspotPanel.jsx";
 import { outcomeOptionsFor, COMPANY_SCALE_OPTIONS, SOURCE_CATEGORIES, SOURCE_OTHER } from "./constants.js";
+import { confirmIfBeforeBooked, confirmIfAnyBeforeBooked } from "./confirmBackdated.js";
 
 const EMPTY = { company_name: "", contact_name: "", email: "", phone: "", company_scale: "", source: "" };
 const NOT_LOGGED = "";
+
+// This lead doesn't exist yet — created_at will be `now()` at insert time,
+// so "today" is the right Booked date to check a same-submit first call
+// against. (A hubspot_contact_id lead may end up with an earlier
+// demo_stage_entered_at once the server-side lookup runs, but that isn't
+// knowable client-side ahead of creating the row — see
+// api/demo-calls/index.js's lookupStageEnteredAt.)
+function todayAsBookedDate() {
+  return new Date().toISOString();
+}
 
 /**
  * Manual entry ("+ Add Opportunity"), and also the target when a rep clicks a
@@ -63,6 +74,7 @@ export function AddDemoCallLeadModal({ onClose, onCreated, prefill }) {
       setFormError("Source is required.");
       return;
     }
+    if (callValues.outcome && !confirmIfBeforeBooked(callValues.call_date, todayAsBookedDate())) return;
     const actor = await ensureName();
     if (!actor) return;
 
@@ -95,6 +107,7 @@ export function AddDemoCallLeadModal({ onClose, onCreated, prefill }) {
       setFormError("Company name and contact name are required.");
       return;
     }
+    if (!confirmIfAnyBeforeBooked(payloads.map((p) => p.call_date), todayAsBookedDate())) return;
     const actor = await ensureName();
     if (!actor) return;
 

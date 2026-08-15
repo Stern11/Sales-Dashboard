@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   BOOKED_PERIOD_OPTIONS, resolvePeriodRange, isWithinRange,
-  OUTCOME_OPTIONS, outcomeMeta, isFutureCallDate, outcomeOptionsFor,
+  OUTCOME_OPTIONS, outcomeMeta, isFutureCallDate, outcomeOptionsFor, isBeforeBooked,
   STATUS_OPTIONS, statusMeta, effectiveStatus, summarizeLeads,
   FUNNEL_TREND_SERIES, weeklyFunnelTrend, bookedDateOf, MIN_TREND_WEEK_START,
 } from "../../../../src/modules/demo-calls/constants.js";
@@ -126,6 +126,31 @@ describe("isFutureCallDate / outcomeOptionsFor", () => {
   });
 });
 
+describe("isBeforeBooked", () => {
+  it("true when the call date is earlier than the booked date", () => {
+    expect(isBeforeBooked("2026-06-29", "2026-08-15T09:00:00.000Z")).toBe(true);
+  });
+
+  it("false for the same calendar day, even with a real timestamp on the booked side", () => {
+    expect(isBeforeBooked("2026-08-15", "2026-08-15T23:59:59.000Z")).toBe(false);
+  });
+
+  it("false when the call is on or after the booked date", () => {
+    expect(isBeforeBooked("2026-08-20", "2026-08-15T09:00:00.000Z")).toBe(false);
+  });
+
+  it("false when either date is missing", () => {
+    expect(isBeforeBooked(null, "2026-08-15")).toBe(false);
+    expect(isBeforeBooked("2026-08-15", null)).toBe(false);
+    expect(isBeforeBooked("", "")).toBe(false);
+  });
+
+  it("accepts a plain YYYY-MM-DD booked date, not just an ISO timestamp", () => {
+    expect(isBeforeBooked("2026-06-29", "2026-08-15")).toBe(true);
+    expect(isBeforeBooked("2026-08-15", "2026-08-15")).toBe(false);
+  });
+});
+
 describe("effectiveStatus", () => {
   it("is 'active' when nothing overrides it", () => {
     expect(effectiveStatus("active", null)).toBe("active");
@@ -176,16 +201,29 @@ describe("summarizeLeads", () => {
 });
 
 describe("bookedDateOf", () => {
-  // "Booked" is when the lead was added to the Demo Calls list, full stop —
-  // it used to prefer the call log's first_call_date when one existed, which
-  // made a lead added this week but not yet called bucket into whatever week
-  // its (still-future) call eventually happens, and made a lead's "booked"
-  // date silently change meaning the moment a call got logged.
-  it("is always created_at, regardless of whether a call's been logged", () => {
+  // "Booked" is never the call log's first_call_date — that used to be
+  // preferred when a call existed, which made a lead added this week but
+  // not yet called bucket into whatever week its (still-future) call
+  // eventually happens, and made "booked" silently change meaning the
+  // moment a call got logged.
+  it("ignores first_call_date entirely, regardless of whether a call's been logged", () => {
     const withCall = { first_call_date: "2026-03-18", created_at: "2026-08-09T06:22:10.546Z" };
     const withoutCall = { first_call_date: null, created_at: "2026-08-09T06:22:10.546Z" };
     expect(bookedDateOf(withCall)).toBe("2026-08-09T06:22:10.546Z");
     expect(bookedDateOf(withoutCall)).toBe("2026-08-09T06:22:10.546Z");
+  });
+
+  // The HubSpot-sourced date is preferred when we have it — it's when the
+  // contact actually reached the Demo Call stage, which can predate
+  // created_at (when this row happened to be tracked) by weeks or months.
+  it("prefers demo_stage_entered_at over created_at when both are present", () => {
+    const lead = { demo_stage_entered_at: "2026-06-29T10:00:00.000Z", created_at: "2026-08-15T09:00:00.000Z" };
+    expect(bookedDateOf(lead)).toBe("2026-06-29T10:00:00.000Z");
+  });
+
+  it("falls back to created_at when there's no HubSpot-sourced date (manual entry, or no history on file)", () => {
+    const lead = { demo_stage_entered_at: null, created_at: "2026-08-15T09:00:00.000Z" };
+    expect(bookedDateOf(lead)).toBe("2026-08-15T09:00:00.000Z");
   });
 });
 

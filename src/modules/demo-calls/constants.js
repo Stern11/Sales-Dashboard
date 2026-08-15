@@ -27,6 +27,24 @@ export function isFutureCallDate(dateStr) {
 }
 
 /**
+ * True if a call's date falls before the lead's Booked date — the first
+ * call can't happen before the meeting itself was booked. Compares calendar
+ * dates only (a call logged the same day the lead was booked is not
+ * "before"). `bookedDate` may be an ISO timestamp (bookedDateOf()'s return
+ * value) or a plain "YYYY-MM-DD" string.
+ *
+ * This is a signal for a human-in-the-loop confirmation prompt at the UI
+ * layer, not a hard validation rule enforced server-side: "Import from
+ * HubSpot" legitimately backfills real historical meetings that can predate
+ * when a lead happened to get tracked here, so the right response to an
+ * out-of-order date is "are you sure?", not an outright rejection.
+ */
+export function isBeforeBooked(callDate, bookedDate) {
+  if (!callDate || !bookedDate) return false;
+  return callDate < String(bookedDate).slice(0, 10);
+}
+
+/**
  * The outcome choices valid for a given call_date: a future date can only be
  * "Scheduled" (the meeting hasn't happened yet, so Completed/No Show would be
  * a lie); any other date can be Completed/No Show but not "Scheduled" (once a
@@ -100,21 +118,30 @@ export function formatCallDate(dateStr) {
 /** Same parsing as formatCallDate(), compact — for table cells rather than a detail page. */
 
 /**
- * The date a lead counts as "booked" — when it was added to the Demo Calls
- * list (demo_call_leads.created_at), not when its first call happened.
+ * The date a lead counts as "booked" — when it (really) entered the Demo
+ * Call stage, not when its first call happened.
  *
- * This used to prefer the call log's first_call_date when one existed, on
- * the theory that a backfilled/imported lead's row-insert time could land
- * weeks after its real meeting. In practice that made "booked" mean two
- * different things depending on whether a call had been logged yet, so the
- * same KPI/date filter silently changed definition under a rep's feet. Now
- * it's always created_at: "Booked" answers "when did this enter the demo
- * call list", full stop. "First Call" is tracked separately (first_call_date
- * / first_call_outcome, driven entirely by the call_date a rep enters when
- * logging it) and isn't affected by this.
+ * Prefers demo_stage_entered_at — HubSpot's own lifecyclestage history for
+ * when the contact first reached the Demo Call stage (see migration 0015,
+ * lib/demo-calls/hubspotStageHistory.js) — falling back to created_at (when
+ * this row was inserted) when that isn't available: manual entries with no
+ * HubSpot contact, or a HubSpot lookup that found no matching history.
+ *
+ * This used to be created_at alone, which is right for a lead an SDR tracks
+ * the same day they call it, but wrong for one tracked well after the fact
+ * (or backfilled via "Import from HubSpot") — that lead would read as
+ * "Booked this week" while carrying a meeting logged for a date months
+ * earlier. Before that, it preferred the call log's first_call_date, which
+ * had the opposite problem: "booked" meant two different things depending
+ * on whether a call had been logged yet, so the same KPI/date filter
+ * silently changed definition under a rep's feet.
+ *
+ * "First Call" is tracked entirely separately (first_call_date /
+ * first_call_outcome, driven by the call_date a rep enters when logging it)
+ * and isn't affected by any of this.
  */
 export function bookedDateOf(lead) {
-  return lead.created_at;
+  return lead.demo_stage_entered_at || lead.created_at;
 }
 
 /** Mirrors summarize() in lib/demo-calls/queries.js — recomputed client-side for whatever filter is currently applied. */

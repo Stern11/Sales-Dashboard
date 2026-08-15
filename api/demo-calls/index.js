@@ -14,7 +14,10 @@
 // POST /api/demo-calls — create a lead: manual entry, or the target of
 // "Log first call" on a live-but-untracked HubSpot contact (accepts an
 // optional `first_call` payload to create the lead and its first call log
-// in one request — see createLead() in lib/demo-calls/queries.js).
+// in one request — see createLead() in lib/demo-calls/queries.js). When the
+// new lead carries a hubspot_contact_id, this also does a second, read-only
+// HubSpot lookup (fetchStageEnteredAt) for a more accurate Booked date than
+// created_at — best-effort, never blocks creation on failure.
 //
 // Demo Calls is a database-backed module, same boundary as Sales Pipeline —
 // see db/schema.sql and docs/ARCHITECTURE.md. "Who's reached Demo Call" is
@@ -27,9 +30,39 @@ import { withDbErrorHandling, ValidationError, ConflictError } from "../../lib/d
 import { requireActor } from "../../lib/auth/actor.js";
 import { withHubspotErrorHandling } from "../../lib/respond.js";
 import { getToken } from "../../lib/hubspot.js";
+import { getLifecycleStages } from "../../lib/abm.js";
 import { fetchEngagementsForContact } from "../../lib/demo-calls/hubspotEngagements.js";
+import { fetchStageEnteredAt } from "../../lib/demo-calls/hubspotStageHistory.js";
 import { listLeads, createLead, getLeadByHubspotContactId, getLeadByPipelineLeadId, listCalls } from "../../lib/demo-calls/queries.js";
 import { isValidOutcome, isValidCompanyScale } from "../../lib/demo-calls/constants.js";
+
+/**
+ * The HubSpot lifecyclestage value this app treats as "Demo Call reached" —
+ * same value lib/abm.js's meeting_done uses, and the one label everything
+ * else in this module (useLiveDemoCallContacts.js, api/sources/index.js)
+ * already keys off of.
+ */
+const DEMO_STAGE_VALUE = "opportunity";
+
+/**
+ * Best-effort lookup of when a HubSpot contact actually reached the Demo
+ * Call stage, for a more accurate Booked date than created_at (see
+ * migration 0015 and lib/demo-calls/hubspotStageHistory.js). Never throws:
+ * a lookup failure (missing scope, rate limit, network) must not block lead
+ * creation — the lead is still created, just with demo_stage_entered_at
+ * left null, falling back to created_at like it always has.
+ */
+async function lookupStageEnteredAt(hubspotContactId) {
+  if (!hubspotContactId) return null;
+  try {
+    const token = getToken();
+    const stages = await getLifecycleStages(token);
+    return await fetchStageEnteredAt(token, hubspotContactId, stages, DEMO_STAGE_VALUE);
+  } catch (err) {
+    console.error(`demo_stage_entered_at lookup failed for contact ${hubspotContactId}:`, err.message);
+    return null;
+  }
+}
 
 function validateCreateBody(body) {
   const { company_name, contact_name, first_call, company_scale } = body || {};
@@ -114,7 +147,9 @@ export default async function handler(req, res) {
         }
       }
       const actor = await requireActor(req);
-      const lead = await createLead({ ...pickCreateFields(req.body), actor });
+      const fields = pickCreateFields(req.body);
+      const demo_stage_entered_at = await lookupStageEnteredAt(fields.hubspot_contact_id);
+      const lead = await createLead({ ...fields, demo_stage_entered_at, actor });
       return { lead };
     });
     return;
